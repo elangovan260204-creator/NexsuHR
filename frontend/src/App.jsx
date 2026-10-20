@@ -1,6 +1,5 @@
 
-import { useState } from 'react'
-
+import { useEffect, useState } from 'react'
 const navigation = [
   { name: 'Dashboard', icon: '⌂' },
   { name: 'Employees', icon: '♟' },
@@ -48,15 +47,98 @@ const activities = [
 function App() {
   const [activePage, setActivePage] = useState('Dashboard')
   const [search, setSearch] = useState('')
+  const [employees, setEmployees] = useState([])
+  const [loading, setLoading] = useState(true)
+  
 
-  const filteredEmployees = employees.filter((employee) =>
-    `${employee.name} ${employee.role} ${employee.department} ${employee.email}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  )
 
+   const [formData, setFormData] = useState({
+  name: '',
+  email: '',
+  department: '',
+  designation: '',
+})
+
+
+const handleInputChange = (event) => {
+  const { name, value } = event.target
+
+  setFormData((previousData) => ({
+    ...previousData,
+    [name]: value,
+  }))
+}
+
+
+
+const handleSubmit = async (event) => {
+  event.preventDefault()
+
+  try {
+    const response = await fetch('/api/employees', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(formData),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to save employee')
+    }
+
+    const newEmployee = await response.json()
+
+    setEmployees((previousEmployees) => [
+      ...previousEmployees,
+      newEmployee,
+    ])
+
+    setFormData({
+      name: '',
+      email: '',
+      department: '',
+      designation: '',
+    })
+
+    setActivePage('Employees')
+    alert('Employee added successfully!')
+  } catch (error) {
+    console.error('Error saving employee:', error)
+    alert('Could not save employee. Please check the backend.')
+  }
+}
+
+
+
+useEffect(() => {
+  fetch('/api/employees')
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error('Failed to fetch employees')
+      }
+      return response.json()
+    })
+    .then((data) => {
+      setEmployees(data)
+    })
+    .catch((error) => {
+      console.error('Error fetching employees:', error)
+    })
+    .finally(() => {
+      setLoading(false)
+    })
+}, [])
+
+const filteredEmployees = employees.filter((employee) =>
+  `${employee.name} ${employee.designation} ${employee.department} ${employee.email}`
+    .toLowerCase()
+    .includes(search.toLowerCase())
+)
+   
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 md:flex">
+      {loading && <p>Loading employees...</p>}
       {/* Sidebar */}
       <aside className="flex w-full flex-col bg-[#101d35] text-slate-200 md:fixed md:inset-y-0 md:left-0 md:w-64">
         <div className="flex items-center gap-3 border-b border-white/10 px-6 py-6">
@@ -261,17 +343,252 @@ function App() {
                 </article>
               </section>
             </>
-          ) : (
-            <section className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <h3 className="text-xl font-bold text-slate-900">{activePage}</h3>
-              <p className="mt-2 text-sm text-slate-500">
-                This section is part of the NexusHR navigation. We'll implement its features step by step.
-              </p>
-              {activePage === 'Employees' && (
-                <p className="mt-4 text-sm text-blue-600">Use the employee table below on the Dashboard to preview the current sample records.</p>
-              )}
-            </section>
-          )}
+          
+) : (
+  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h3 className="text-xl font-bold text-slate-900">
+          Employee Management
+        </h3>
+        <p className="mt-1 text-sm text-slate-500">
+          View and manage your employee records.
+        </p>
+      </div>
+      <button
+        onClick={() => setActivePage('Add Employee')}
+        className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+      >
+        + Add Employee
+      </button>
+    </div>
+
+    {activePage === 'Employees' && (
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b bg-slate-50 text-slate-500">
+            <tr>
+              <th className="p-3">ID</th>
+              <th className="p-3">Name</th>
+              <th className="p-3">Designation</th>
+              <th className="p-3">Department</th>
+              <th className="p-3">Email</th>
+              <th className="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredEmployees.map((employee) => (
+              <tr key={employee.id} className="border-b border-slate-100">
+                <td className="p-3">{employee.id}</td>
+                <td className="p-3 font-medium text-slate-800">{employee.name}</td>
+                <td className="p-3">{employee.designation}</td>
+                <td className="p-3">{employee.department}</td>
+                <td className="p-3">{employee.email}</td>
+                <td className="p-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData({
+                        name: employee.name,
+                        email: employee.email,
+                        department: employee.department,
+                        designation: employee.designation,
+                      })
+                      setActivePage('Edit Employee')
+                    }}
+                    className="rounded-lg bg-blue-50 px-3 py-1.5 font-medium text-blue-700 hover:bg-blue-100"
+                  >
+                    Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {filteredEmployees.length === 0 && (
+          <p className="py-8 text-center text-slate-500">
+            No employees found.
+          </p>
+        )}
+      </div>
+    )}
+
+   //Add Employee From   
+{activePage === 'Add Employee' && (
+  <form onSubmit={handleSubmit} className="max-w-2xl space-y-5">
+    <h4 className="text-lg font-semibold text-slate-900">
+      New Employee Details
+    </h4>
+
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">
+        Full Name
+      </label>
+      <input
+     type="text"
+      name="name"
+      value={formData.name}
+      onChange={handleInputChange}
+      placeholder="Enter employee name"
+      className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+      required
+       />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">
+        Email Address
+      </label>
+      <input
+        type="email"
+        name="email"
+        value={formData.email}
+        onChange={handleInputChange}
+        placeholder="employee@example.com"
+        className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+        required
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">
+        Department
+      </label>
+      <input
+    type="text"
+    name="department"
+    value={formData.department}
+    onChange={handleInputChange}
+    placeholder="e.g. Engineering"
+    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+    required
+    />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">
+        Designation
+      </label>
+      <input
+    type="text"
+    name="designation"
+    value={formData.designation}
+    onChange={handleInputChange}
+    placeholder="e.g. Java Developer"
+    className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
+    required
+      />
+    </div>
+
+    <div className="flex gap-3">
+      <button
+        type="submit"
+        className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700"
+      >
+        Save Employee
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setActivePage('Employees')}
+        className="rounded-lg border border-slate-300 px-5 py-2.5 font-semibold text-slate-700 hover:bg-slate-50"
+      >
+        Cancel
+      </button>
+    </div>
+  </form>
+)}
+
+//Edit Employee From
+
+{activePage === 'Edit Employee' && (
+  <form
+    onSubmit={handleUpdate}
+    className="max-w-2xl space-y-5"
+  >
+    <h4 className="text-lg font-semibold text-slate-900">
+      Edit Employee Details
+    </h4>
+
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">
+        Full Name
+      </label>
+      <input
+        name="name"
+        value={formData.name}
+        onChange={handleInputChange}
+        className="w-full rounded-lg border border-slate-300 px-3 py-2"
+        required
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">
+        Email Address
+      </label>
+      <input
+        type="email"
+        name="email"
+        value={formData.email}
+        onChange={handleInputChange}
+        className="w-full rounded-lg border border-slate-300 px-3 py-2"
+        required
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">
+        Department
+      </label>
+      <input
+        name="department"
+        value={formData.department}
+        onChange={handleInputChange}
+        className="w-full rounded-lg border border-slate-300 px-3 py-2"
+        required
+      />
+    </div>
+
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">
+        Designation
+      </label>
+      <input
+        name="designation"
+        value={formData.designation}
+        onChange={handleInputChange}
+        className="w-full rounded-lg border border-slate-300 px-3 py-2"
+        required
+      />
+    </div>
+
+    <div className="flex gap-3">
+      <button
+        type="submit"
+        className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white"
+      >
+        Update Employee
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setActivePage('Employees')}
+        className="rounded-lg border border-slate-300 px-5 py-2.5"
+      >
+        Cancel
+      </button>
+    </div>
+  </form>
+)}
+
+
+
+
+  </section>
+)}
+
 
           {/* Recent employees */}
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -310,7 +627,7 @@ function App() {
                           <span className="font-semibold text-slate-800">{employee.name}</span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-4 text-slate-600">{employee.role}</td>
+                      <td className="whitespace-nowrap px-5 py-4 text-slate-600">{employee.designation}</td>
                       <td className="whitespace-nowrap px-5 py-4 text-slate-600">{employee.department}</td>
                       <td className="whitespace-nowrap px-5 py-4 text-slate-500">{employee.email}</td>
                       <td className="whitespace-nowrap px-5 py-4">
