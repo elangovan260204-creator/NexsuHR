@@ -49,8 +49,8 @@ function App() {
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
+  const [editingId, setEditingId] = useState(null)
   
-
 
    const [formData, setFormData] = useState({
   name: '',
@@ -108,6 +108,83 @@ const handleSubmit = async (event) => {
     alert('Could not save employee. Please check the backend.')
   }
 }
+
+
+
+const handleUpdate = async (event) => {
+  event.preventDefault()
+
+  if (editingId === null) {
+    alert('Please select an employee to edit.')
+    return
+  }
+
+  try {
+    const response = await fetch(`/api/employees/${editingId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(formData),
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update employee')
+    }
+
+    // Update the employee in the frontend list
+    setEmployees((previousEmployees) =>
+      previousEmployees.map((employee) =>
+        employee.id === editingId
+          ? { ...employee, ...formData }
+          : employee
+      )
+    )
+
+    setEditingId(null)
+    setActivePage('Employees')
+    alert('Employee updated successfully!')
+  } catch (error) {
+    console.error('Error updating employee:', error)
+    alert('Could not update employee. Please check the backend.')
+  }
+}
+
+
+
+
+const handleDelete = async (employeeId) => {
+  const confirmed = window.confirm(
+    'Are you sure you want to delete this employee?'
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  try {
+    const response = await fetch(`/api/employees/${employeeId}`, {
+      method: 'DELETE',
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to delete employee')
+    }
+
+    setEmployees((previousEmployees) =>
+      previousEmployees.filter(
+        (employee) => employee.id !== employeeId
+      )
+    )
+
+    alert('Employee deleted successfully!')
+  } catch (error) {
+    console.error('Error deleting employee:', error)
+    alert('Could not delete employee. Please check the backend.')
+  }
+}
+
+
 
 
 
@@ -194,6 +271,7 @@ const filteredEmployees = employees.filter((employee) =>
           <div className="relative w-full max-w-md">
             <span className="absolute left-3 top-2.5 text-lg text-slate-400">⌕</span>
             <input
+              
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search employees, departments..."
@@ -388,6 +466,7 @@ const filteredEmployees = employees.filter((employee) =>
                   <button
                     type="button"
                     onClick={() => {
+                      setEditingId(employee.id)
                       setFormData({
                         name: employee.name,
                         email: employee.email,
@@ -400,6 +479,16 @@ const filteredEmployees = employees.filter((employee) =>
                   >
                     Edit
                   </button>
+
+                  
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(employee.id)}
+                    className="ml-2 rounded-lg bg-red-50 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100"
+                  >
+                    Delete
+                  </button>
+
                 </td>
               </tr>
             ))}
@@ -414,7 +503,7 @@ const filteredEmployees = employees.filter((employee) =>
       </div>
     )}
 
-   //Add Employee From   
+   {/*Add Employee From*/}   
 {activePage === 'Add Employee' && (
   <form onSubmit={handleSubmit} className="max-w-2xl space-y-5">
     <h4 className="text-lg font-semibold text-slate-900">
@@ -500,7 +589,7 @@ const filteredEmployees = employees.filter((employee) =>
   </form>
 )}
 
-//Edit Employee From
+{/*Edit Employee From*/}
 
 {activePage === 'Edit Employee' && (
   <form
