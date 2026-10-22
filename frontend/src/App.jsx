@@ -50,7 +50,27 @@ function App() {
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
+const [attendanceRecords, setAttendanceRecords] = useState([])
+const [attendanceLoading, setAttendanceLoading] = useState(false)
+const [selectedEmployeeId, setSelectedEmployeeId] = useState('')
+
+const [leaveRequests, setLeaveRequests] = useState([])
+const [leaveLoading, setLeaveLoading] = useState(false)
+
+const [leaveEmployeeId, setLeaveEmployeeId] = useState('')
+const [leaveStartDate, setLeaveStartDate] = useState('')
+const [leaveEndDate, setLeaveEndDate] = useState('')
+const [leaveReason, setLeaveReason] = useState('')
+
+
   
+
+
+
+const [attendanceDate, setAttendanceDate] = useState(
+  new Date().toISOString().split('T')[0]
+)
+const [attendanceStatus, setAttendanceStatus] = useState('PRESENT')
 
    const [formData, setFormData] = useState({
   name: '',
@@ -185,6 +205,208 @@ const handleDelete = async (employeeId) => {
 }
 
 
+const loadAttendance = async (employeeId) => {
+  setAttendanceLoading(true)
+
+  try {
+    const response = await fetch(
+      `/api/attendance/employee/${employeeId}`
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to load attendance')
+    }
+
+    const data = await response.json()
+    setAttendanceRecords(data)
+  } catch (error) {
+    console.error('Error loading attendance:', error)
+    alert('Could not load attendance records.')
+  } finally {
+    setAttendanceLoading(false)
+  }
+}
+
+
+
+
+const handleCheckIn = async (employeeId) => {
+  try {
+    const response = await fetch(
+      `/api/attendance/check-in/${employeeId}`,
+      {
+        method: 'POST',
+      }
+    )
+
+    const message = await response.text()
+
+if (!response.ok) {
+  throw new Error(message || 'Check-in failed')
+}
+
+    alert('Check-in successful!')
+    await loadAttendance(employeeId)
+  } catch (error) {
+    console.error('Check-in error:', error)
+    alert(error.message || 'Could not check in.')
+  }
+}
+
+
+
+
+const handleCheckOut = async (employeeId) => {
+  try {
+    const response = await fetch(
+      `/api/attendance/check-out/${employeeId}`,
+      {
+        method: 'PUT',
+      }
+    )
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(
+        typeof data === 'string'
+          ? data
+          : 'Check-out failed'
+      )
+    }
+
+    alert('Check-out successful!')
+    await loadAttendance(employeeId)
+  } catch (error) {
+    console.error('Check-out error:', error)
+    alert(error.message || 'Could not check out.')
+  }
+}
+
+
+
+
+
+const handleMarkAttendance = async () => {
+  if (!selectedEmployeeId) {
+    alert('Please select an employee')
+    return
+  }
+
+  try {
+    const response = await fetch('/api/attendance/mark', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employeeId: Number(selectedEmployeeId),
+        date: attendanceDate,
+        status: attendanceStatus,
+      }),
+    })
+
+    const result = await response.text()
+
+    if (!response.ok) {
+      throw new Error(result || 'Failed to mark attendance')
+    }
+
+    alert('Attendance marked successfully!')
+    await loadAttendance(selectedEmployeeId)
+  } catch (error) {
+    alert(error.message)
+  }
+}
+
+
+
+
+const loadLeaveRequests = async () => {
+  setLeaveLoading(true)
+
+  try {
+    const response = await fetch('/api/leaves')
+
+    if (!response.ok) {
+      throw new Error('Failed to load leave requests')
+    }
+
+    const data = await response.json()
+    setLeaveRequests(Array.isArray(data) ? data : [data])
+  } catch (error) {
+    alert(error.message)
+  } finally {
+    setLeaveLoading(false)
+  }
+}
+
+const handleApplyLeave = async (event) => {
+  event.preventDefault()
+
+  if (!leaveEmployeeId || !leaveStartDate || !leaveEndDate || !leaveReason.trim()) {
+    alert('Please fill in all leave details')
+    return
+  }
+
+  if (leaveEndDate < leaveStartDate) {
+    alert('End date cannot be before start date')
+    return
+  }
+
+  try {
+    const response = await fetch('/api/leaves', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employeeId: Number(leaveEmployeeId),
+        startDate: leaveStartDate,
+        endDate: leaveEndDate,
+        reason: leaveReason.trim(),
+      }),
+    })
+
+    const result = await response.text()
+
+    if (!response.ok) {
+      throw new Error(result || 'Failed to submit leave request')
+    }
+
+    alert('Leave request submitted successfully!')
+
+    setLeaveEmployeeId('')
+    setLeaveStartDate('')
+    setLeaveEndDate('')
+    setLeaveReason('')
+
+    await loadLeaveRequests()
+  } catch (error) {
+    alert(error.message)
+  }
+}
+
+const handleUpdateLeaveStatus = async (id, status) => {
+  try {
+    const response = await fetch(
+      `/api/leaves/${id}/status?status=${status}`,
+      { method: 'PUT' }
+    )
+
+    const result = await response.text()
+
+    if (!response.ok) {
+      throw new Error(result || 'Failed to update leave status')
+    }
+
+    alert(`Leave request ${status.toLowerCase()} successfully!`)
+    await loadLeaveRequests()
+  } catch (error) {
+    alert(error.message)
+  }
+}
+
 
 
 
@@ -206,6 +428,14 @@ useEffect(() => {
       setLoading(false)
     })
 }, [])
+
+
+useEffect(() => {
+  if (activePage === 'Leave Management') {
+    loadLeaveRequests()
+  }
+}, [activePage])
+
 
 const filteredEmployees = employees.filter((employee) =>
   `${employee.name} ${employee.designation} ${employee.department} ${employee.email}`
@@ -421,7 +651,356 @@ const filteredEmployees = employees.filter((employee) =>
                 </article>
               </section>
             </>
-          
+                 
+            ) : activePage === 'Attendance' ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-xl font-bold text-slate-900">
+                  Attendance Management
+                </h3>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  Select an employee to manage attendance.
+                </p>
+
+                <div className="mt-6 max-w-md">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Select Employee
+                  </label>
+
+                  <select
+                    value={selectedEmployeeId}
+                    onChange={(event) => {
+                      const employeeId = event.target.value
+                      setSelectedEmployeeId(employeeId)
+
+                      if (employeeId) {
+                        loadAttendance(employeeId)
+                      } else {
+                        setAttendanceRecords([])
+                      }
+                    }}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+                  >
+                    <option value="">Choose an employee</option>
+
+                    {employees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.name} (ID: {employee.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                    {/* Admin Mark Attendance */}
+                    <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5">
+                      <h4 className="text-lg font-semibold text-slate-900">
+                        Admin Mark Attendance
+                      </h4>
+
+                      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-slate-700">
+                            Attendance Date
+                          </label>
+
+                          <input
+                            type="date"
+                            value={attendanceDate}
+                            onChange={(event) => setAttendanceDate(event.target.value)}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-slate-700">
+                            Attendance Status
+                          </label>
+
+                          <select
+                            value={attendanceStatus}
+                            onChange={(event) => setAttendanceStatus(event.target.value)}
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+                          >
+                            <option value="PRESENT">Present</option>
+                            <option value="ABSENT">Absent</option>
+                            <option value="LEAVE">Leave</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={!selectedEmployeeId || !attendanceDate}
+                        onClick={handleMarkAttendance}
+                        className="mt-4 rounded-lg bg-purple-600 px-5 py-2.5 font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Save Attendance
+                      </button>
+                    </div>
+
+
+
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        disabled={!selectedEmployeeId}
+                        onClick={() => handleCheckIn(selectedEmployeeId)}
+                        className="rounded-lg bg-emerald-600 px-5 py-2.5 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Check In
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!selectedEmployeeId}
+                        onClick={() => handleCheckOut(selectedEmployeeId)}
+                        className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Check Out
+                      </button>
+
+                      
+                    </div>
+                
+                    <div className="mt-8">
+                      <h4 className="mb-4 text-lg font-semibold text-slate-900">
+                        Attendance History
+                      </h4>
+
+                      {attendanceLoading ? (
+                        <p className="text-sm text-slate-500">
+                          Loading attendance records...
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm">
+                            <thead className="border-b bg-slate-50 text-slate-500">
+                              <tr>
+                                <th className="p-3">Employee ID</th>
+                                <th className="p-3">Date</th>
+                                <th className="p-3">Check In</th>
+                                <th className="p-3">Check Out</th>
+                                <th className="p-3">Status</th>
+                              </tr>
+                            </thead>
+
+                            <tbody>
+                              {attendanceRecords.map((record) => (
+                                <tr key={record.id} className="border-b border-slate-100">
+                                  <td className="p-3">{record.employeeId}</td>
+                                  <td className="p-3">{record.attendanceDate}</td>
+                                  <td className="p-3">
+                                    {record.checkIn
+                                      ? new Date(record.checkIn).toLocaleTimeString()
+                                      : '-'}
+                                  </td>
+                                  <td className="p-3">
+                                    {record.checkOut
+                                      ? new Date(record.checkOut).toLocaleTimeString()
+                                      : '-'}
+                                  </td>
+                                  <td className="p-3">
+                                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                      {record.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+
+                              {attendanceRecords.length === 0 && (
+                                <tr>
+                                  <td colSpan="5" className="p-6 text-center text-slate-500">
+                                    No attendance records found.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+
+       
+            </section>
+            ) : activePage === 'Leave Management' ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-xl font-bold text-slate-900">
+                  Leave Management
+                </h3>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  Submit leave requests and manage employee leave applications.
+                </p>
+
+                {/* Apply for Leave */}
+                <form onSubmit={handleApplyLeave} className="mt-6 max-w-2xl space-y-4">
+                  <h4 className="text-lg font-semibold text-slate-900">
+                    Apply for Leave
+                  </h4>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Select Employee
+                    </label>
+
+                    <select
+                      value={leaveEmployeeId}
+                      onChange={(event) => setLeaveEmployeeId(event.target.value)}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"
+                      required
+                    >
+                      <option value="">Choose an employee</option>
+                      {employees.map((employee) => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.name} (ID: {employee.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        value={leaveStartDate}
+                        onChange={(event) => setLeaveStartDate(event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        value={leaveEndDate}
+                        min={leaveStartDate || undefined}
+                        onChange={(event) => setLeaveEndDate(event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Reason
+                    </label>
+                    <textarea
+                      value={leaveReason}
+                      onChange={(event) => setLeaveReason(event.target.value)}
+                      placeholder="Enter the reason for leave"
+                      rows={3}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2.5"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700"
+                  >
+                    Submit Leave Request
+                  </button>
+                </form>
+
+                {/* Leave Requests */}
+                <div className="mt-10">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <h4 className="text-lg font-semibold text-slate-900">
+                      Leave Requests
+                    </h4>
+
+                    <button
+                      type="button"
+                      onClick={loadLeaveRequests}
+                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  {leaveLoading ? (
+                    <p className="text-sm text-slate-500">Loading leave requests...</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="border-b bg-slate-50 text-slate-500">
+                          <tr>
+                            <th className="p-3">Employee ID</th>
+                            <th className="p-3">Start Date</th>
+                            <th className="p-3">End Date</th>
+                            <th className="p-3">Reason</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3">Actions</th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {leaveRequests.map((request) => (
+                            <tr key={request.id} className="border-b border-slate-100">
+                              <td className="p-3">{request.employeeId}</td>
+                              <td className="p-3">{request.startDate}</td>
+                              <td className="p-3">{request.endDate}</td>
+                              <td className="p-3">{request.reason}</td>
+                              <td className="p-3">
+                                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                  {request.status}
+                                </span>
+                              </td>
+                              <td className="p-3">
+                                {request.status === 'PENDING' ? (
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateLeaveStatus(request.id, 'APPROVED')
+                                      }
+                                      className="rounded-md bg-emerald-50 px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-100"
+                                    >
+                                      Approve
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateLeaveStatus(request.id, 'REJECTED')
+                                      }
+                                      className="rounded-md bg-red-50 px-3 py-1.5 font-medium text-red-700 hover:bg-red-100"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400">No actions</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+
+                          {leaveRequests.length === 0 && (
+                            <tr>
+                              <td colSpan={6} className="p-6 text-center text-slate-500">
+                                No leave requests found.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+
+              </section>
+
+
 ) : (
   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
