@@ -45,6 +45,9 @@ const activities = [
 ]
 
 function App() {
+   const [token, setToken] = useState(
+    () => sessionStorage.getItem('nexushr_token') || ''
+  )
   const [activePage, setActivePage] = useState('Dashboard')
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
@@ -183,9 +186,14 @@ const handleDelete = async (employeeId) => {
   }
 
   try {
+    
     const response = await fetch(`/api/employees/${employeeId}`, {
       method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     })
+
 
     if (!response.ok) {
       throw new Error('Failed to delete employee')
@@ -410,16 +418,80 @@ const handleUpdateLeaveStatus = async (id, status) => {
 
 
 
+const handleLogin = async (event) => {
+  event.preventDefault()
+
+  const form = event.currentTarget
+  const username = form.username.value.trim()
+  const password = form.password.value
+
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+         Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ username, password }),
+    })
+
+    const responseText = await response.text()
+
+    let data
+    try {
+      data = JSON.parse(responseText)
+    } catch {
+      data = { message: responseText }
+    }
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Login failed')
+    }
+
+    if (!data.token) {
+      throw new Error('Login response did not contain a token')
+    }
+
+    sessionStorage.setItem('nexushr_token', data.token)
+    setToken(data.token)
+  } catch (error) {
+    alert(error.message)
+  }
+}
+
+
+
+
+
+
+
+
+
 useEffect(() => {
-  fetch('/api/employees')
-    .then((response) => {
+  if (!token) {
+    setLoading(false)
+    return
+  }
+
+  fetch('/api/employees', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+    .then(async (response) => {
       if (!response.ok) {
-        throw new Error('Failed to fetch employees')
+        throw new Error(`Failed to fetch employees: ${response.status}`)
       }
       return response.json()
     })
     .then((data) => {
-      setEmployees(data)
+      const employeeList = Array.isArray(data)
+        ? data
+        : Array.isArray(data.value)
+          ? data.value
+          : []
+
+      setEmployees(employeeList)
     })
     .catch((error) => {
       console.error('Error fetching employees:', error)
@@ -427,7 +499,7 @@ useEffect(() => {
     .finally(() => {
       setLoading(false)
     })
-}, [])
+}, [token])
 
 
 useEffect(() => {
@@ -443,8 +515,62 @@ const filteredEmployees = employees.filter((employee) =>
     .includes(search.toLowerCase())
 )
    
-  return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 md:flex">
+  
+return (
+  <>
+    {!token ? (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
+        <form
+          onSubmit={handleLogin}
+          className="w-full max-w-md space-y-5 rounded-2xl bg-white p-8 shadow-xl"
+        >
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-slate-900">
+              NexusHR
+            </h1>
+            <p className="mt-2 text-slate-500">
+              Sign in to your workforce dashboard
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Username
+            </label>
+            <input
+              name="username"
+              type="text"
+              required
+              autoComplete="username"
+              className="w-full rounded-lg border p-3"
+              placeholder="Enter your username"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Password
+            </label>
+            <input
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              className="w-full rounded-lg border p-3"
+              placeholder="Enter your password"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full rounded-lg bg-blue-600 p-3 font-semibold text-white hover:bg-blue-700"
+          >
+            Sign In
+          </button>
+        </form>
+      </div>
+    ) : (
+      <div className="min-h-screen bg-slate-100 text-slate-800 md:flex">
       {loading && <p>Loading employees...</p>}
       {/* Sidebar */}
       <aside className="flex w-full flex-col bg-[#101d35] text-slate-200 md:fixed md:inset-y-0 md:left-0 md:w-64">
@@ -1326,8 +1452,11 @@ const filteredEmployees = employees.filter((employee) =>
           </footer>
         </div>
       </main>
-    </div>
+   
+      </div>
+    )}
+  </>
   )
-} 
+}
 
 export default App

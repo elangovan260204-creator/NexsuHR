@@ -11,7 +11,9 @@ D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\employee\E
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\EmployeeServiceApplication.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\exception\EmployeeNotFoundException.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\exception\GlobalExceptionHandler.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\JwtAuthenticationFilter.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\leave\LeaveRequest.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\leave\LeaveRequestController.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\leave\LeaveRequestRepository.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\leave\LeaveRequestService.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\SecurityConfig.java
