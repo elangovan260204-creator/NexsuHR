@@ -99,12 +99,13 @@ const handleSubmit = async (event) => {
 
   try {
     const response = await fetch('/api/employees', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(formData),
-    })
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  },
+  body: JSON.stringify(formData),
+});
 
     if (!response.ok) {
       throw new Error('Failed to save employee')
@@ -143,13 +144,16 @@ const handleUpdate = async (event) => {
   }
 
   try {
-    const response = await fetch(`/api/employees/${editingId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(formData),
-    })
+    
+const response = await fetch(`/api/employees/${editingId}`, {
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  },
+  body: JSON.stringify(formData),
+});
+
 
     if (!response.ok) {
       throw new Error('Failed to update employee')
@@ -418,46 +422,51 @@ const handleUpdateLeaveStatus = async (id, status) => {
 
 
 
-const handleLogin = async (event) => {
-  event.preventDefault()
 
-  const form = event.currentTarget
-  const username = form.username.value.trim()
-  const password = form.password.value
+const handleLogin = async (event) => {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const username = form.username.value.trim();
+  const password = form.password.value;
 
   try {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ username, password }),
-    })
+    });
 
-    const responseText = await response.text()
+    const responseText = await response.text();
 
-    let data
+    let data;
     try {
-      data = JSON.parse(responseText)
+      data = JSON.parse(responseText);
     } catch {
-      data = { message: responseText }
+      data = { message: responseText };
     }
 
     if (!response.ok) {
-      throw new Error(data.message || 'Login failed')
+      throw new Error(data.message || 'Login failed');
     }
 
     if (!data.token) {
-      throw new Error('Login response did not contain a token')
+      throw new Error('Login response did not contain a token');
     }
 
-    sessionStorage.setItem('nexushr_token', data.token)
-    setToken(data.token)
+    // Save the new JWT token
+    sessionStorage.setItem('nexushr_token', data.token);
+
+    // Update React state
+    setToken(data.token);
+
+    alert('Login successful!');
   } catch (error) {
-    alert(error.message)
+    alert(error.message);
   }
-}
+};
 
 
 
@@ -469,8 +478,8 @@ const handleLogin = async (event) => {
 
 useEffect(() => {
   if (!token) {
-    setLoading(false)
-    return
+    setLoading(false);
+    return;
   }
 
   fetch('/api/employees', {
@@ -479,27 +488,37 @@ useEffect(() => {
     },
   })
     .then(async (response) => {
+      const responseText = await response.text();
+
+      console.log('Employee API status:', response.status);
+      console.log('Employee API response:', responseText);
+
       if (!response.ok) {
-        throw new Error(`Failed to fetch employees: ${response.status}`)
+        throw new Error(
+          `Failed to fetch employees: ${response.status}`
+        );
       }
-      return response.json()
+
+      return JSON.parse(responseText);
     })
     .then((data) => {
       const employeeList = Array.isArray(data)
         ? data
         : Array.isArray(data.value)
           ? data.value
-          : []
+          : [];
 
-      setEmployees(employeeList)
+      console.log('Parsed employee list:', employeeList);
+      setEmployees(employeeList);
     })
     .catch((error) => {
-      console.error('Error fetching employees:', error)
+      console.error('Error fetching employees:', error);
     })
     .finally(() => {
-      setLoading(false)
-    })
-}, [token])
+      setLoading(false);
+    });
+}, [token]);
+
 
 
 useEffect(() => {

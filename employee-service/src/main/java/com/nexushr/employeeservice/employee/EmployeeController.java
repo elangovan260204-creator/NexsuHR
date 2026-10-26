@@ -53,6 +53,7 @@ public EmployeeResponseDTO updateEmployee(
 @DeleteMapping("/{id}")
 @ResponseStatus(HttpStatus.NO_CONTENT)
 public void deleteEmployee(@NonNull @PathVariable Long id) {
+    System.out.println("DELETE CONTROLLER CALLED - ID: " + id);
     employeeService.deleteEmployee(id);
 }
 
