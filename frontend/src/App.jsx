@@ -66,6 +66,52 @@ const [leaveEndDate, setLeaveEndDate] = useState('')
 const [leaveReason, setLeaveReason] = useState('')
 
 
+const [performanceReviews, setPerformanceReviews] = useState([]);
+const [performanceLoading, setPerformanceLoading] = useState(false);
+const [performanceError, setPerformanceError] = useState("");
+
+
+
+const [jobOpenings, setJobOpenings] = useState([]);
+const [candidates, setCandidates] = useState([]);
+const [recruitmentLoading, setRecruitmentLoading] = useState(false);
+const [recruitmentError, setRecruitmentError] = useState("");
+const [showJobForm, setShowJobForm] = useState(false);
+
+const [showCandidateForm, setShowCandidateForm] = useState(false);
+
+const [candidateForm, setCandidateForm] = useState({
+  fullName: "",
+  email: "",
+  phone: "",
+  skills: "",
+  jobOpeningId: "",
+});
+
+const [jobForm, setJobForm] = useState({
+  title: "",
+  department: "",
+  location: "",
+  employmentType: "FULL_TIME",
+  closingDate: "",
+  description: "",
+});
+
+
+
+
+const [performanceForm, setPerformanceForm] = useState({
+  employeeId: "",
+  reviewPeriod: "",
+  rating: 3,
+  goals: "",
+  feedback: "",
+});
+
+const [editingPerformanceId, setEditingPerformanceId] = useState(null);
+
+
+
   
 
 
@@ -217,27 +263,36 @@ const handleDelete = async (employeeId) => {
 }
 
 
+
 const loadAttendance = async (employeeId) => {
-  setAttendanceLoading(true)
+  setAttendanceLoading(true);
 
   try {
     const response = await fetch(
-      `/api/attendance/employee/${employeeId}`
-    )
+      `/api/attendance/employee/${employeeId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
     if (!response.ok) {
-      throw new Error('Failed to load attendance')
+      throw new Error(
+        `Failed to load attendance: HTTP ${response.status}`
+      );
     }
 
-    const data = await response.json()
-    setAttendanceRecords(data)
+    const data = await response.json();
+    setAttendanceRecords(data);
   } catch (error) {
-    console.error('Error loading attendance:', error)
-    alert('Could not load attendance records.')
+    console.error('Error loading attendance:', error);
+    alert(error.message);
   } finally {
-    setAttendanceLoading(false)
+    setAttendanceLoading(false);
   }
-}
+};
+
 
 
 
@@ -245,11 +300,14 @@ const loadAttendance = async (employeeId) => {
 const handleCheckIn = async (employeeId) => {
   try {
     const response = await fetch(
-      `/api/attendance/check-in/${employeeId}`,
-      {
-        method: 'POST',
-      }
-    )
+  `/api/attendance/check-in/${employeeId}`,
+  {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+);
 
     const message = await response.text()
 
@@ -268,34 +326,45 @@ if (!response.ok) {
 
 
 
+
 const handleCheckOut = async (employeeId) => {
   try {
     const response = await fetch(
       `/api/attendance/check-out/${employeeId}`,
       {
         method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       }
-    )
+    );
 
-    const data = await response.json()
+    // Read the response as text first
+    const responseText = await response.text();
 
+    // Handle backend errors
     if (!response.ok) {
       throw new Error(
-        typeof data === 'string'
-          ? data
-          : 'Check-out failed'
-      )
+        responseText || `Check-out failed: HTTP ${response.status}`
+      );
     }
 
-    alert('Check-out successful!')
-    await loadAttendance(employeeId)
+    // Parse JSON only when the response contains a body
+    const data = responseText
+      ? JSON.parse(responseText)
+      : null;
+
+    console.log('Check-out response:', data);
+
+    alert('Check-out successful!');
+
+    // Refresh attendance history
+    await loadAttendance(employeeId);
   } catch (error) {
-    console.error('Check-out error:', error)
-    alert(error.message || 'Could not check out.')
+    console.error('Check-out error:', error);
+    alert(error.message || 'Could not check out.');
   }
-}
-
-
+};
 
 
 
@@ -307,16 +376,17 @@ const handleMarkAttendance = async () => {
 
   try {
     const response = await fetch('/api/attendance/mark', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        employeeId: Number(selectedEmployeeId),
-        date: attendanceDate,
-        status: attendanceStatus,
-      }),
-    })
+  method: 'PUT',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  },
+  body: JSON.stringify({
+    employeeId: Number(selectedEmployeeId),
+    date: attendanceDate,
+    status: attendanceStatus,
+  }),
+});
 
     const result = await response.text()
 
@@ -334,24 +404,31 @@ const handleMarkAttendance = async () => {
 
 
 
+
 const loadLeaveRequests = async () => {
   setLeaveLoading(true)
 
   try {
-    const response = await fetch('/api/leaves')
+    const response = await fetch('/api/leaves', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
 
     if (!response.ok) {
-      throw new Error('Failed to load leave requests')
+      throw new Error(`Failed to load leave requests: HTTP ${response.status}`)
     }
 
     const data = await response.json()
     setLeaveRequests(Array.isArray(data) ? data : [data])
   } catch (error) {
+    console.error('Error loading leave requests:', error)
     alert(error.message)
   } finally {
     setLeaveLoading(false)
   }
 }
+
 
 const handleApplyLeave = async (event) => {
   event.preventDefault()
@@ -370,8 +447,9 @@ const handleApplyLeave = async (event) => {
     const response = await fetch('/api/leaves', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-      },
+          'Content-Type': 'application/json',
+           Authorization: `Bearer ${token}`,
+     },
       body: JSON.stringify({
         employeeId: Number(leaveEmployeeId),
         startDate: leaveStartDate,
@@ -402,9 +480,14 @@ const handleApplyLeave = async (event) => {
 const handleUpdateLeaveStatus = async (id, status) => {
   try {
     const response = await fetch(
-      `/api/leaves/${id}/status?status=${status}`,
-      { method: 'PUT' }
-    )
+  `/api/leaves/${id}/status?status=${status}`,
+  {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  }
+)
 
     const result = await response.text()
 
@@ -420,6 +503,363 @@ const handleUpdateLeaveStatus = async (id, status) => {
 }
 
 
+const loadPerformanceReviews = async () => {
+  setPerformanceLoading(true);
+  setPerformanceError("");
+
+  try {
+    const response = await fetch("/api/performance", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      throw new Error(
+        responseText || `Failed to load reviews: HTTP ${response.status}`
+      );
+    }
+
+    setPerformanceReviews(
+      responseText ? JSON.parse(responseText) : []
+    );
+  } catch (error) {
+    setPerformanceError(error.message);
+  } finally {
+    setPerformanceLoading(false);
+  }
+};
+
+const handlePerformanceInputChange = (event) => {
+  const { name, value } = event.target;
+
+  setPerformanceForm((previous) => ({
+    ...previous,
+    [name]: name === "rating" ? Number(value) : value,
+  }));
+};
+
+const resetPerformanceForm = () => {
+  setPerformanceForm({
+    employeeId: "",
+    reviewPeriod: "",
+    rating: 3,
+    goals: "",
+    feedback: "",
+  });
+
+  setEditingPerformanceId(null);
+};
+
+const handlePerformanceSubmit = async (event) => {
+  event.preventDefault();
+  setPerformanceError("");
+
+  const payload = {
+    employeeId: Number(performanceForm.employeeId),
+    reviewPeriod: performanceForm.reviewPeriod.trim(),
+    rating: Number(performanceForm.rating),
+    goals: performanceForm.goals.trim(),
+    feedback: performanceForm.feedback.trim(),
+  };
+
+  try {
+    const isEditing = editingPerformanceId !== null;
+
+    const response = await fetch(
+      isEditing
+        ? `/api/performance/${editingPerformanceId}`
+        : "/api/performance",
+      {
+        method: isEditing ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      throw new Error(
+        responseText || `Request failed: HTTP ${response.status}`
+      );
+    }
+
+    resetPerformanceForm();
+    await loadPerformanceReviews();
+  } catch (error) {
+    setPerformanceError(error.message);
+  }
+};
+
+const handleEditPerformance = (review) => {
+  setPerformanceForm({
+    employeeId: String(review.employeeId),
+    reviewPeriod: review.reviewPeriod || "",
+    rating: Number(review.rating || 3),
+    goals: review.goals || "",
+    feedback: review.feedback || "",
+  });
+
+  setEditingPerformanceId(review.id);
+};
+
+const handleDeletePerformance = async (id) => {
+  if (!window.confirm("Are you sure you want to delete this review?")) {
+    return;
+  }
+
+  setPerformanceError("");
+
+  try {
+    const response = await fetch(`/api/performance/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || `Delete failed: HTTP ${response.status}`);
+    }
+
+    await loadPerformanceReviews();
+  } catch (error) {
+    setPerformanceError(error.message);
+  }
+};
+
+
+
+
+const loadRecruitmentData = async () => {
+  setRecruitmentLoading(true);
+  setRecruitmentError("");
+
+  try {
+    const [jobsResponse, candidatesResponse] = await Promise.all([
+      fetch("/api/recruitment/jobs", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }),
+      fetch("/api/recruitment/candidates", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }),
+    ]);
+
+    if (!jobsResponse.ok) {
+      throw new Error(`Jobs request failed: HTTP ${jobsResponse.status}`);
+    }
+
+    if (!candidatesResponse.ok) {
+      throw new Error(
+        `Candidates request failed: HTTP ${candidatesResponse.status}`
+      );
+    }
+
+    const jobs = await jobsResponse.json();
+    const candidateList = await candidatesResponse.json();
+
+    setJobOpenings(jobs);
+    setCandidates(candidateList);
+  } catch (error) {
+    console.error("Recruitment loading error:", error);
+    setRecruitmentError(error.message);
+  } finally {
+    setRecruitmentLoading(false);
+  }
+};
+
+const handleJobInputChange = (event) => {
+  const { name, value } = event.target;
+
+  setJobForm((previousForm) => ({
+    ...previousForm,
+    [name]: value,
+  }));
+};
+
+
+const handleCandidateInputChange = (event) => {
+  const { name, value } = event.target;
+
+  setCandidateForm((previousForm) => ({
+    ...previousForm,
+    [name]: value,
+  }));
+};
+
+
+const handleCreateCandidate = async (event) => {
+  event.preventDefault();
+
+  setRecruitmentLoading(true);
+  setRecruitmentError("");
+
+  try {
+    const response = await fetch("/api/recruitment/candidates", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        ...candidateForm,
+        jobOpeningId: Number(candidateForm.jobOpeningId),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+
+      throw new Error(
+        errorText || `Failed to create candidate: HTTP ${response.status}`
+      );
+    }
+
+    await loadRecruitmentData();
+
+    setCandidateForm({
+      fullName: "",
+      email: "",
+      phone: "",
+      skills: "",
+      jobOpeningId: "",
+    });
+
+    setShowCandidateForm(false);
+  } catch (error) {
+    console.error("Candidate creation error:", error);
+    setRecruitmentError(error.message);
+  } finally {
+    setRecruitmentLoading(false);
+  }
+};
+
+
+const handleUpdateCandidateStatus = async (candidateId, newStatus) => {
+  setRecruitmentLoading(true);
+  setRecruitmentError("");
+
+  try {
+    const response = await fetch(
+      `/api/recruitment/candidates/${candidateId}/status?status=${encodeURIComponent(newStatus)}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        errorText || `Failed to update status: HTTP ${response.status}`
+      );
+    }
+
+    await loadRecruitmentData();
+  } catch (error) {
+    console.error("Candidate status update error:", error);
+    setRecruitmentError(error.message);
+  } finally {
+    setRecruitmentLoading(false);
+  }
+};
+
+
+const handleDeleteCandidate = async (candidateId) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this candidate?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setRecruitmentLoading(true);
+  setRecruitmentError("");
+
+  try {
+    const response = await fetch(
+      `/api/recruitment/candidates/${candidateId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        errorText || `Failed to delete candidate: HTTP ${response.status}`
+      );
+    }
+
+    await loadRecruitmentData();
+  } catch (error) {
+    console.error("Candidate deletion error:", error);
+    setRecruitmentError(error.message);
+  } finally {
+    setRecruitmentLoading(false);
+  }
+};
+
+
+const handleCreateJob = async (event) => {
+  event.preventDefault();
+
+  setRecruitmentLoading(true);
+  setRecruitmentError("");
+
+  try {
+    const response = await fetch("/api/recruitment/jobs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(jobForm),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        errorText || `Failed to create job: HTTP ${response.status}`
+      );
+    }
+
+    await loadRecruitmentData();
+
+    setJobForm({
+      title: "",
+      department: "",
+      location: "",
+      employmentType: "FULL_TIME",
+      closingDate: "",
+      description: "",
+    });
+
+    setShowJobForm(false);
+  } catch (error) {
+    console.error("Job creation error:", error);
+    setRecruitmentError(error.message);
+  } finally {
+    setRecruitmentLoading(false);
+  }
+};
 
 
 
@@ -528,13 +968,28 @@ useEffect(() => {
 }, [activePage])
 
 
+useEffect(() => {
+  if (activePage === "Performance" && token) {
+    loadPerformanceReviews();
+  }
+}, [activePage, token]);
+
 const filteredEmployees = employees.filter((employee) =>
   `${employee.name} ${employee.designation} ${employee.department} ${employee.email}`
     .toLowerCase()
     .includes(search.toLowerCase())
 )
    
-  
+
+useEffect(() => {
+  if (activePage === "Recruitment" && token) {
+    loadRecruitmentData();
+  }
+}, [activePage, token]);
+
+
+
+
 return (
   <>
     {!token ? (
@@ -1146,7 +1601,825 @@ return (
               </section>
 
 
+
+
+
+
+) : activePage === "Performance" ? (
+  <section className="space-y-6">
+
+    {/* Performance Page Header */}
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h3 className="text-2xl font-bold tracking-tight text-slate-900">
+          Performance Management
+        </h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Track employee performance, review goals, and manage feedback.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={loadPerformanceReviews}
+        disabled={performanceLoading}
+        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+      >
+        <span>↻</span>
+        {performanceLoading ? "Refreshing..." : "Refresh Reviews"}
+      </button>
+    </div>
+
+    {/* Performance Overview Cards */}
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+
+      {/* Total Reviews */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-500">
+              Total Reviews
+            </p>
+            <h3 className="mt-2 text-3xl font-bold text-slate-900">
+              {performanceReviews.length}
+            </h3>
+            <p className="mt-2 text-xs text-slate-500">
+              All recorded reviews
+            </p>
+          </div>
+
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-2xl text-blue-600">
+            ▤
+          </div>
+        </div>
+      </div>
+
+      {/* Average Rating */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-500">
+              Average Rating
+            </p>
+            <h3 className="mt-2 text-3xl font-bold text-slate-900">
+              {performanceReviews.length > 0
+                ? (
+                    performanceReviews.reduce(
+                      (total, review) =>
+                        total + Number(review.rating || 0),
+                      0
+                    ) / performanceReviews.length
+                  ).toFixed(1)
+                : "—"}
+              <span className="ml-1 text-base font-medium text-slate-400">
+                / 5
+              </span>
+            </h3>
+            <p className="mt-2 text-xs text-slate-500">
+              Average across all reviews
+            </p>
+          </div>
+
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-2xl text-amber-500">
+            ★
+          </div>
+        </div>
+      </div>
+
+      {/* Top Ratings */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-500">
+              Top Ratings
+            </p>
+            <h3 className="mt-2 text-3xl font-bold text-slate-900">
+              {
+                performanceReviews.filter(
+                  (review) => Number(review.rating) >= 4
+                ).length
+              }
+            </h3>
+            <p className="mt-2 text-xs text-slate-500">
+              Reviews rated 4 or 5
+            </p>
+          </div>
+
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-2xl text-emerald-600">
+            ↗
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    {/* Error Message */}
+    {performanceError && (
+      <div
+        role="alert"
+        className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+      >
+        {performanceError}
+      </div>
+    )}
+
+    {/* Performance Review Form */}
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-6 border-b border-slate-100 pb-4">
+        <h4 className="text-lg font-bold text-slate-900">
+          {editingPerformanceId !== null
+            ? "Edit Performance Review"
+            : "Create Performance Review"}
+        </h4>
+        <p className="mt-1 text-sm text-slate-500">
+          Enter the employee's review details below.
+        </p>
+      </div>
+
+      <form
+        onSubmit={handlePerformanceSubmit}
+        className="grid grid-cols-1 gap-5 md:grid-cols-2"
+      >
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Employee
+          </label>
+          <select
+            name="employeeId"
+            value={performanceForm.employeeId}
+            onChange={handlePerformanceInputChange}
+            required
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="">Select an employee</option>
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.name} (ID: {employee.id})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Review Period
+          </label>
+          <input
+            name="reviewPeriod"
+            value={performanceForm.reviewPeriod}
+            onChange={handlePerformanceInputChange}
+            placeholder="e.g. Q4 2026"
+            required
+            className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Performance Rating
+          </label>
+          <select
+            name="rating"
+            value={performanceForm.rating}
+            onChange={handlePerformanceInputChange}
+            required
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          >
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <option key={rating} value={rating}>
+                {rating} / 5 {rating === 5 ? "— Outstanding" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Goals
+          </label>
+          <input
+            name="goals"
+            value={performanceForm.goals}
+            onChange={handlePerformanceInputChange}
+            placeholder="Enter employee goals"
+            className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
+            Manager Feedback
+          </label>
+          <textarea
+            name="feedback"
+            value={performanceForm.feedback}
+            onChange={handlePerformanceInputChange}
+            rows={4}
+            placeholder="Describe achievements, areas for improvement, and recommendations..."
+            className="w-full resize-y rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-3 md:col-span-2">
+          <button
+            type="submit"
+            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          >
+            {editingPerformanceId !== null
+              ? "Update Review"
+              : "Save Review"}
+          </button>
+
+          {editingPerformanceId !== null && (
+            <button
+              type="button"
+              onClick={resetPerformanceForm}
+              className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
+
+    {/* Performance Reviews Table */}
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-6">
+        <div>
+          <h4 className="text-lg font-bold text-slate-900">
+            Performance Reviews
+          </h4>
+          <p className="mt-1 text-sm text-slate-500">
+            Review and manage employee assessments.
+          </p>
+        </div>
+
+        <span className="rounded-full bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
+          {performanceReviews.length} reviews
+        </span>
+      </div>
+
+      {performanceLoading ? (
+        <p className="py-10 text-center text-sm text-slate-500">
+          Loading performance reviews...
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-5 py-4 font-semibold">Employee</th>
+                <th className="px-5 py-4 font-semibold">Review Period</th>
+                <th className="px-5 py-4 font-semibold">Rating</th>
+                <th className="px-5 py-4 font-semibold">Goals</th>
+                <th className="px-5 py-4 font-semibold">Feedback</th>
+                <th className="px-5 py-4 font-semibold">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100">
+              {performanceReviews.map((review) => {
+                const employee = employees.find(
+                  (item) => Number(item.id) === Number(review.employeeId)
+                );
+
+                return (
+                  <tr
+                    key={review.id}
+                    className="transition hover:bg-slate-50"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="font-semibold text-slate-800">
+                        {employee?.name || `Employee ${review.employeeId}`}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        ID: {review.employeeId}
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-4 text-slate-600">
+                      {review.reviewPeriod}
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2.5 py-1.5 font-semibold text-amber-700">
+                        <span>★</span>
+                        {review.rating} / 5
+                      </span>
+                    </td>
+
+                    <td className="max-w-48 px-5 py-4 text-slate-600">
+                      {review.goals || "—"}
+                    </td>
+
+                    <td className="max-w-56 px-5 py-4 text-slate-600">
+                      {review.feedback || "—"}
+                    </td>
+
+                    <td className="whitespace-nowrap px-5 py-4">
+                      <button
+                        type="button"
+                        onClick={() => handleEditPerformance(review)}
+                        className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePerformance(review.id)}
+                        className="ml-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {performanceReviews.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-5 py-12 text-center"
+                  >
+                    <p className="font-semibold text-slate-700">
+                      No performance reviews yet
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Create your first review using the form above.
+                    </p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+
+   </section>
+
+
+
+
+          ) : activePage === "Recruitment" ? (
+
+          <section className="space-y-6">
+
+
+            {/* Add Job Opening Form */}
+      {showJobForm && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h4 className="mb-5 text-lg font-bold text-slate-900">
+            Create Job Opening
+          </h4>
+
+          <form
+            onSubmit={handleCreateJob}
+            className="grid grid-cols-1 gap-5 md:grid-cols-2"
+          >
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Job Title
+              </label>
+              <input
+                name="title"
+                value={jobForm.title}
+                onChange={handleJobInputChange}
+                placeholder="e.g. Java Developer"
+                required
+                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Department
+              </label>
+              <input
+                name="department"
+                value={jobForm.department}
+                onChange={handleJobInputChange}
+                placeholder="e.g. Engineering"
+                required
+                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Location
+              </label>
+              <input
+                name="location"
+                value={jobForm.location}
+                onChange={handleJobInputChange}
+                placeholder="e.g. Bengaluru"
+                required
+                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Employment Type
+              </label>
+              <select
+                name="employmentType"
+                value={jobForm.employmentType}
+                onChange={handleJobInputChange}
+                required
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+              >
+                <option value="FULL_TIME">Full Time</option>
+                <option value="PART_TIME">Part Time</option>
+                <option value="CONTRACT">Contract</option>
+                <option value="INTERNSHIP">Internship</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Closing Date
+              </label>
+              <input
+                type="date"
+                name="closingDate"
+                value={jobForm.closingDate}
+                onChange={handleJobInputChange}
+                required
+                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Job Description
+              </label>
+              <textarea
+                name="description"
+                value={jobForm.description}
+                onChange={handleJobInputChange}
+                rows={4}
+                placeholder="Describe the role and responsibilities..."
+                required
+                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+              />
+            </div>
+
+            <div className="flex gap-3 md:col-span-2">
+              <button
+                type="submit"
+                disabled={recruitmentLoading}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {recruitmentLoading ? "Saving..." : "Save Job Opening"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowJobForm(false)}
+                className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+            {/* Recruitment Header */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900">
+                  Recruitment Management
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Manage job openings and track candidates.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowJobForm(!showJobForm)}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                {showJobForm ? "Cancel" : "+ Add Job Opening"}
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {recruitmentError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {recruitmentError}
+              </div>
+            )}
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">Total Job Openings</p>
+                <h4 className="mt-2 text-3xl font-bold text-slate-900">
+                  {jobOpenings.length}
+                </h4>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">Open Positions</p>
+                <h4 className="mt-2 text-3xl font-bold text-green-600">
+                  {jobOpenings.filter((job) => job.status === "OPEN").length}
+                </h4>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">Total Candidates</p>
+                <h4 className="mt-2 text-3xl font-bold text-blue-600">
+                  {candidates.length}
+                </h4>
+              </div>
+            </div>
+
+            {/* Job Openings Table */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-100 p-6">
+                <h4 className="text-lg font-bold text-slate-900">Job Openings</h4>
+                <p className="mt-1 text-sm text-slate-500">
+                  View currently available positions.
+                </p>
+              </div>
+
+              {recruitmentLoading ? (
+                <p className="py-10 text-center text-sm text-slate-500">
+                  Loading recruitment data...
+                </p>
+              ) : jobOpenings.length === 0 ? (
+                <p className="py-10 text-center text-sm text-slate-500">
+                  No job openings found. Add your first job opening.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                      <tr>
+                        <th className="px-5 py-4">Job Title</th>
+                        <th className="px-5 py-4">Department</th>
+                        <th className="px-5 py-4">Location</th>
+                        <th className="px-5 py-4">Employment Type</th>
+                        <th className="px-5 py-4">Closing Date</th>
+                        <th className="px-5 py-4">Status</th>
+                        
+                      </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-slate-100">
+                      {jobOpenings.map((job) => (
+                        <tr key={job.id} className="hover:bg-slate-50">
+                          <td className="px-5 py-4 font-semibold text-slate-800">
+                            {job.title}
+                          </td>
+                          <td className="px-5 py-4 text-slate-600">
+                            {job.department}
+                          </td>
+                          <td className="px-5 py-4 text-slate-600">
+                            {job.location}
+                          </td>
+                          <td className="px-5 py-4 text-slate-600">
+                            {job.employmentType?.replace("_", " ")}
+                          </td>
+                          <td className="px-5 py-4 text-slate-600">
+                            {job.closingDate || "-"}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                              {job.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+          
+          {/* Add Candidate Button and Form */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h4 className="text-lg font-bold text-slate-900">
+                  Candidate Management
+                </h4>
+                <p className="mt-1 text-sm text-slate-500">
+                  Register candidates for available job openings.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCandidateForm(!showCandidateForm)}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                {showCandidateForm ? "Cancel" : "+ Add Candidate"}
+              </button>
+            </div>
+
+            {showCandidateForm && (
+              <form
+                onSubmit={handleCreateCandidate}
+                className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2"
+              >
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Full Name
+                  </label>
+                  <input
+                    name="fullName"
+                    value={candidateForm.fullName}
+                    onChange={handleCandidateInputChange}
+                    placeholder="Enter candidate name"
+                    required
+                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={candidateForm.email}
+                    onChange={handleCandidateInputChange}
+                    placeholder="candidate@example.com"
+                    required
+                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={candidateForm.phone}
+                    onChange={handleCandidateInputChange}
+                    placeholder="Enter phone number"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Skills
+                  </label>
+                  <input
+                    name="skills"
+                    value={candidateForm.skills}
+                    onChange={handleCandidateInputChange}
+                    placeholder="Java, React, SQL"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Job Opening
+                  </label>
+                  <select
+                    name="jobOpeningId"
+                    value={candidateForm.jobOpeningId}
+                    onChange={handleCandidateInputChange}
+                    required
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+                  >
+                    <option value="">Select a job opening</option>
+
+                    {jobOpenings
+                      .filter((job) => job.status === "OPEN")
+                      .map((job) => (
+                        <option key={job.id} value={job.id}>
+                          {job.title} — {job.location}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-3 md:col-span-2">
+                  <button
+                    type="submit"
+                    disabled={recruitmentLoading || jobOpenings.filter(
+                      (job) => job.status === "OPEN"
+                    ).length === 0}
+                    className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    Save Candidate
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCandidateForm(false)}
+                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+
+
+
+            {/* Candidates Table */}
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-100 p-6">
+                <h4 className="text-lg font-bold text-slate-900">Candidates</h4>
+                <p className="mt-1 text-sm text-slate-500">
+                  Track applicants and their application status.
+                </p>
+              </div>
+
+              {candidates.length === 0 ? (
+                <p className="py-10 text-center text-sm text-slate-500">
+                  No candidates have applied yet.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                      <tr>
+                        <th className="px-5 py-4">Candidate</th>
+                        <th className="px-5 py-4">Email</th>
+                        <th className="px-5 py-4">Phone</th>
+                        <th className="px-5 py-4">Skills</th>
+                        <th className="px-5 py-4">Job ID</th>
+                        <th className="px-5 py-4">Status</th>
+                        <th className="px-5 py-4">Actions</th>
+                      </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-slate-100">
+                      {candidates.map((candidate) => (
+                        <tr key={candidate.id} className="hover:bg-slate-50">
+                          <td className="px-5 py-4 font-semibold text-slate-800">
+                            {candidate.fullName}
+                          </td>
+                          <td className="px-5 py-4 text-slate-600">
+                            {candidate.email}
+                          </td>
+                          <td className="px-5 py-4 text-slate-600">
+                            {candidate.phone || "-"}
+                          </td>
+                          <td className="px-5 py-4 text-slate-600">
+                            {candidate.skills || "-"}
+                          </td>
+                          <td className="px-5 py-4 text-slate-600">
+                            {candidate.jobOpeningId}
+                          </td>
+                          <td className="px-5 py-4">
+                          <select
+                            value={candidate.status}
+                            onChange={(event) =>
+                              handleUpdateCandidateStatus(candidate.id, event.target.value)
+                            }
+                            disabled={recruitmentLoading}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500"
+                          >
+                            <option value="APPLIED">Applied</option>
+                            <option value="SCREENING">Screening</option>
+                            <option value="INTERVIEW">Interview</option>
+                            <option value="SELECTED">Selected</option>
+                            <option value="REJECTED">Rejected</option>
+                          </select>
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCandidate(candidate.id)}
+                              disabled={recruitmentLoading}
+                              className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+
+
+
+
 ) : (
+
   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
@@ -1158,7 +2431,7 @@ return (
         </p>
       </div>
       <button
-        onClick={() => setActivePage('Add Employee')}
+        onClick={() => setActivePage('Add Employee')} 
         className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
       >
         + Add Employee
