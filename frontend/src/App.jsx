@@ -74,6 +74,65 @@ const [performanceError, setPerformanceError] = useState("");
 
 const [jobOpenings, setJobOpenings] = useState([]);
 const [candidates, setCandidates] = useState([]);
+
+
+
+
+const totalJobOpenings = jobOpenings.length;
+
+const openJobOpenings = jobOpenings.filter(
+  (job) => job.status === "OPEN"
+).length;
+
+const totalCandidates = candidates.length;
+
+const interviewCandidates = candidates.filter(
+  (candidate) => candidate.status === "INTERVIEW"
+).length;
+
+const selectedCandidates = candidates.filter(
+  (candidate) => candidate.status === "SELECTED"
+).length;
+
+const rejectedCandidates = candidates.filter(
+  (candidate) => candidate.status === "REJECTED"
+).length;
+
+
+
+const [candidateSearch, setCandidateSearch] = useState("");
+const [candidateStatusFilter, setCandidateStatusFilter] = useState("ALL");
+const [selectedJobFilter, setSelectedJobFilter] = useState("ALL");
+
+
+
+const filteredCandidates = candidates.filter((candidate) => {
+  const searchText = candidateSearch.trim().toLowerCase();
+
+  const matchesSearch =
+    (candidate.fullName || "").toLowerCase().includes(searchText) ||
+    (candidate.email || "").toLowerCase().includes(searchText);
+
+  const matchesStatus =
+    candidateStatusFilter === "ALL" ||
+    candidate.status === candidateStatusFilter;
+
+  const matchesJob =
+    selectedJobFilter === "ALL" ||
+    Number(candidate.jobOpeningId) === Number(selectedJobFilter);
+
+  return matchesSearch && matchesStatus && matchesJob;
+});
+
+
+const getApplicantsCount = (jobId) => {
+  return candidates.filter(
+    (candidate) =>
+      Number(candidate.jobOpeningId) === Number(jobId)
+  ).length;
+};
+
+
 const [recruitmentLoading, setRecruitmentLoading] = useState(false);
 const [recruitmentError, setRecruitmentError] = useState("");
 const [showJobForm, setShowJobForm] = useState(false);
@@ -87,6 +146,8 @@ const [candidateForm, setCandidateForm] = useState({
   skills: "",
   jobOpeningId: "",
 });
+const [editingCandidateId, setEditingCandidateId] = useState(null);
+const [selectedCandidate, setSelectedCandidate] = useState(null);
 
 const [jobForm, setJobForm] = useState({
   title: "",
@@ -96,8 +157,7 @@ const [jobForm, setJobForm] = useState({
   closingDate: "",
   description: "",
 });
-
-
+const [editingJobId, setEditingJobId] = useState(null);
 
 
 const [performanceForm, setPerformanceForm] = useState({
@@ -698,16 +758,56 @@ const handleCandidateInputChange = (event) => {
   }));
 };
 
+const handleEditCandidate = (candidate) => {
+  setCandidateForm({
+    fullName: candidate.fullName || "",
+    email: candidate.email || "",
+    phone: candidate.phone || "",
+    skills: candidate.skills || "",
+    jobOpeningId: String(candidate.jobOpeningId || ""),
+  });
+
+  setEditingCandidateId(candidate.id);
+  setShowCandidateForm(true);
+};
+
+
 
 const handleCreateCandidate = async (event) => {
+
+  if (
+  !candidateForm.fullName.trim() ||
+  !candidateForm.email.trim()
+) {
+  setRecruitmentError("Candidate name and email are required.");
+  return;
+}
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+if (!emailPattern.test(candidateForm.email.trim())) {
+  setRecruitmentError("Please enter a valid email address.");
+  return;
+}
+
+setRecruitmentError("");
+
   event.preventDefault();
 
-  setRecruitmentLoading(true);
-  setRecruitmentError("");
+  const isEditing = editingCandidateId !== null;
+
+  const url = isEditing
+    ? `/api/recruitment/candidates/${editingCandidateId}`
+    : "/api/recruitment/candidates";
+
+  const method = isEditing ? "PUT" : "POST";
 
   try {
-    const response = await fetch("/api/recruitment/candidates", {
-      method: "POST",
+    setRecruitmentLoading(true);
+    setRecruitmentError("");
+
+    const response = await fetch(url, {
+      method,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -718,13 +818,25 @@ const handleCreateCandidate = async (event) => {
       }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
+   if (!response.ok) {
+  const errorText = await response.text();
 
-      throw new Error(
-        errorText || `Failed to create candidate: HTTP ${response.status}`
-      );
-    }
+  let errorMessage = errorText;
+
+  try {
+    const errorData = JSON.parse(errorText);
+    errorMessage =
+      errorData.message ||
+      errorData.error ||
+      errorText;
+  } catch {
+    // Keep the original response text
+  }
+
+  throw new Error(
+    errorMessage || "Failed to create candidate"
+  );
+}
 
     await loadRecruitmentData();
 
@@ -736,14 +848,15 @@ const handleCreateCandidate = async (event) => {
       jobOpeningId: "",
     });
 
+    setEditingCandidateId(null);
     setShowCandidateForm(false);
   } catch (error) {
-    console.error("Candidate creation error:", error);
     setRecruitmentError(error.message);
   } finally {
     setRecruitmentLoading(false);
   }
 };
+
 
 
 const handleUpdateCandidateStatus = async (candidateId, newStatus) => {
@@ -818,15 +931,24 @@ const handleDeleteCandidate = async (candidateId) => {
 };
 
 
+
 const handleCreateJob = async (event) => {
   event.preventDefault();
+
+  const isEditing = editingJobId !== null;
+
+  const url = isEditing
+    ? `/api/recruitment/jobs/${editingJobId}`
+    : "/api/recruitment/jobs";
+
+  const method = isEditing ? "PUT" : "POST";
 
   setRecruitmentLoading(true);
   setRecruitmentError("");
 
   try {
-    const response = await fetch("/api/recruitment/jobs", {
-      method: "POST",
+    const response = await fetch(url, {
+      method,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -837,7 +959,8 @@ const handleCreateJob = async (event) => {
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(
-        errorText || `Failed to create job: HTTP ${response.status}`
+        errorText ||
+          `Failed to ${isEditing ? "update" : "create"} job: HTTP ${response.status}`
       );
     }
 
@@ -852,14 +975,90 @@ const handleCreateJob = async (event) => {
       description: "",
     });
 
+    setEditingJobId(null);
     setShowJobForm(false);
   } catch (error) {
-    console.error("Job creation error:", error);
+    console.error("Job save error:", error);
     setRecruitmentError(error.message);
   } finally {
     setRecruitmentLoading(false);
   }
 };
+
+
+
+
+const handleEditJob = (job) => {
+  setJobForm({
+    title: job.title || "",
+    department: job.department || "",
+    location: job.location || "",
+    employmentType: job.employmentType || "FULL_TIME",
+    closingDate: job.closingDate
+      ? String(job.closingDate).slice(0, 10)
+      : "",
+    description: job.description || "",
+  });
+
+  setEditingJobId(job.id);
+  setShowJobForm(true);
+};
+
+
+
+
+const handleDeleteJob = async (jobId) => {
+  const confirmed = window.confirm(
+    "Are you sure you want to delete this job opening?"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setRecruitmentLoading(true);
+  setRecruitmentError("");
+
+  try {
+    const response = await fetch(
+      `/api/recruitment/jobs/${jobId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        errorText || `Failed to delete job: HTTP ${response.status}`
+      );
+    }
+
+    await loadRecruitmentData();
+
+    if (editingJobId === jobId) {
+      setEditingJobId(null);
+      setShowJobForm(false);
+      setJobForm({
+        title: "",
+        department: "",
+        location: "",
+        employmentType: "FULL_TIME",
+        closingDate: "",
+        description: "",
+      });
+    }
+  } catch (error) {
+    console.error("Job deletion error:", error);
+    setRecruitmentError(error.message);
+  } finally {
+    setRecruitmentLoading(false);
+  }
+};
+
 
 
 
@@ -1969,7 +2168,161 @@ return (
           <section className="space-y-6">
 
 
-            {/* Add Job Opening Form */}
+           
+        {/* Summary Cards */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">Total Job Openings</p>
+                <h4 className="mt-2 text-3xl font-bold text-slate-900">
+                  {jobOpenings.length}
+                </h4>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">Open Positions</p>
+                <h4 className="mt-2 text-3xl font-bold text-green-600">
+                  {jobOpenings.filter((job) => job.status === "OPEN").length}
+                </h4>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-sm text-slate-500">Total Candidates</p>
+                <h4 className="mt-2 text-3xl font-bold text-blue-600">
+                  {candidates.length}
+                </h4>
+              </div>
+            </div>
+         
+                    {/* Recruitment Analytics Cards */}
+                    <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {/* Total Job Openings */}
+                      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-500">
+                              Total Job Openings
+                            </p>
+                            <h3 className="mt-2 text-3xl font-bold text-slate-900">
+                              {totalJobOpenings}
+                            </h3>
+                          </div>
+                          <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+                            <span className="text-xl">💼</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Open Positions */}
+                      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-500">
+                              Open Positions
+                            </p>
+                            <h3 className="mt-2 text-3xl font-bold text-slate-900">
+                              {openJobOpenings}
+                            </h3>
+                          </div>
+                          <div className="rounded-xl bg-green-50 p-3 text-green-600">
+                            <span className="text-xl">📂</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Total Candidates */}
+                      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-500">
+                              Total Candidates
+                            </p>
+                            <h3 className="mt-2 text-3xl font-bold text-slate-900">
+                              {totalCandidates}
+                            </h3>
+                          </div>
+                          <div className="rounded-xl bg-purple-50 p-3 text-purple-600">
+                            <span className="text-xl">👥</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Interviews */}
+                      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-500">
+                              Interviews
+                            </p>
+                            <h3 className="mt-2 text-3xl font-bold text-slate-900">
+                              {interviewCandidates}
+                            </h3>
+                          </div>
+                          <div className="rounded-xl bg-amber-50 p-3 text-amber-600">
+                            <span className="text-xl">📅</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Selected Candidates */}
+                      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-500">
+                              Selected Candidates
+                            </p>
+                            <h3 className="mt-2 text-3xl font-bold text-slate-900">
+                              {selectedCandidates}
+                            </h3>
+                          </div>
+                          <div className="rounded-xl bg-emerald-50 p-3 text-emerald-600">
+                            <span className="text-xl">✅</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Rejected Candidates */}
+                      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-500">
+                              Rejected Candidates
+                            </p>
+                            <h3 className="mt-2 text-3xl font-bold text-slate-900">
+                              {rejectedCandidates}
+                            </h3>
+                          </div>
+                          <div className="rounded-xl bg-red-50 p-3 text-red-600">
+                            <span className="text-xl">❌</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+           {/* Recruitment Header */}
+             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900">
+                  Recruitment Management
+                </h3>
+                
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowJobForm(!showJobForm)}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                {showJobForm ? "Cancel" : "+ Add Job Opening"}
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {recruitmentError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {recruitmentError}
+              </div>
+            )}
+                {/* Add Job Opening Form */}
       {showJobForm && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h4 className="mb-5 text-lg font-bold text-slate-900">
@@ -2070,13 +2423,19 @@ return (
             </div>
 
             <div className="flex gap-3 md:col-span-2">
+              
               <button
                 type="submit"
                 disabled={recruitmentLoading}
                 className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {recruitmentLoading ? "Saving..." : "Save Job Opening"}
+                {recruitmentLoading
+                  ? "Saving..."
+                  : editingJobId !== null
+                    ? "Update Job Opening"
+                    : "Add Job Opening"}
               </button>
+
 
               <button
                 type="button"
@@ -2089,331 +2448,515 @@ return (
           </form>
         </div>
       )}
-            {/* Recruitment Header */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-2xl font-bold text-slate-900">
-                  Recruitment Management
-                </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Manage job openings and track candidates.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowJobForm(!showJobForm)}
-                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-              >
-                {showJobForm ? "Cancel" : "+ Add Job Opening"}
-              </button>
-            </div>
-
-            {/* Error Message */}
-            {recruitmentError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {recruitmentError}
-              </div>
-            )}
-
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-slate-500">Total Job Openings</p>
-                <h4 className="mt-2 text-3xl font-bold text-slate-900">
-                  {jobOpenings.length}
-                </h4>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-slate-500">Open Positions</p>
-                <h4 className="mt-2 text-3xl font-bold text-green-600">
-                  {jobOpenings.filter((job) => job.status === "OPEN").length}
-                </h4>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-slate-500">Total Candidates</p>
-                <h4 className="mt-2 text-3xl font-bold text-blue-600">
-                  {candidates.length}
-                </h4>
-              </div>
-            </div>
-
-            {/* Job Openings Table */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-100 p-6">
-                <h4 className="text-lg font-bold text-slate-900">Job Openings</h4>
-                <p className="mt-1 text-sm text-slate-500">
-                  View currently available positions.
-                </p>
-              </div>
-
-              {recruitmentLoading ? (
-                <p className="py-10 text-center text-sm text-slate-500">
-                  Loading recruitment data...
-                </p>
-              ) : jobOpenings.length === 0 ? (
-                <p className="py-10 text-center text-sm text-slate-500">
-                  No job openings found. Add your first job opening.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                      <tr>
-                        <th className="px-5 py-4">Job Title</th>
-                        <th className="px-5 py-4">Department</th>
-                        <th className="px-5 py-4">Location</th>
-                        <th className="px-5 py-4">Employment Type</th>
-                        <th className="px-5 py-4">Closing Date</th>
-                        <th className="px-5 py-4">Status</th>
-                        
-                      </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-slate-100">
-                      {jobOpenings.map((job) => (
-                        <tr key={job.id} className="hover:bg-slate-50">
-                          <td className="px-5 py-4 font-semibold text-slate-800">
-                            {job.title}
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {job.department}
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {job.location}
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {job.employmentType?.replace("_", " ")}
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {job.closingDate || "-"}
-                          </td>
-                          <td className="px-5 py-4">
-                            <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                              {job.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
           
-          {/* Add Candidate Button and Form */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h4 className="text-lg font-bold text-slate-900">
-                  Candidate Management
-                </h4>
-                <p className="mt-1 text-sm text-slate-500">
-                  Register candidates for available job openings.
-                </p>
-              </div>
+           
+                {/* Job Openings Table */}
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-100 p-6">
+                    <h4 className="text-lg font-bold text-slate-900">
+                      Job Openings
+                    </h4>
+                    <p className="mt-1 text-sm text-slate-500">
+                      View currently available positions.
+                    </p>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => setShowCandidateForm(!showCandidateForm)}
-                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                {showCandidateForm ? "Cancel" : "+ Add Candidate"}
-              </button>
+                  {recruitmentLoading ? (
+                    <p className="py-10 text-center text-sm text-slate-500">
+                      Loading recruitment data...
+                    </p>
+                  ) : jobOpenings.length === 0 ? (
+                    <p className="py-10 text-center text-sm text-slate-500">
+                      No job openings found. Add your first job opening.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                          <tr>
+                            <th className="px-5 py-4">Job Title</th>
+                            <th className="px-5 py-4">Department</th>
+                            <th className="px-5 py-4">Location</th>
+                            <th className="px-5 py-4">Employment Type</th>
+                            <th className="px-5 py-4">Closing Date</th>
+                            <th className="px-5 py-4">Applicants</th>
+                            <th className="px-5 py-4">Status</th>
+                            <th className="px-5 py-4 text-center">Actions</th>
+                          </tr>
+                        </thead>
+
+                        <tbody className="divide-y divide-slate-100">
+                          {jobOpenings.map((job) => (
+                            <tr key={job.id} className="hover:bg-slate-50">
+                              <td className="px-5 py-4 font-semibold text-slate-800">
+                                {job.title}
+                              </td>
+
+                              <td className="px-5 py-4 text-slate-600">
+                                {job.department}
+                              </td>
+
+
+                              <td className="px-5 py-4 text-slate-600">
+                                {job.location}
+                              </td>
+
+                              <td className="px-5 py-4 text-slate-600">
+                                {job.employmentType?.replace("_", " ")}
+                              </td>
+
+                              
+
+                              <td className="px-5 py-4 text-slate-600">
+                                {job.closingDate || "-"}
+                              </td>
+
+                              <td className="px-5 py-4">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedJobFilter(String(job.id));
+                                          document.getElementById("candidates-section")
+                                            ?.scrollIntoView({ behavior: "smooth" });
+                                        }}
+                                        className="font-semibold text-blue-600 hover:underline"
+                                      >
+                                        {getApplicantsCount(job.id)}
+                                      </button>
+                                    </td>
+
+                              <td className="px-5 py-4">
+                                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                                  {job.status}
+                                </span>
+                              </td>
+
+                              {/* Actions: Edit and Delete */}
+                              <td className="px-5 py-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditJob(job)}
+                                    disabled={recruitmentLoading}
+                                    className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                                  >
+                                    Edit
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteJob(job.id)}
+                                    disabled={recruitmentLoading}
+                                    className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+
+         
+{/* Add Candidate Button and Form */}
+<div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+  <div className="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h4 className="text-lg font-bold text-slate-900">
+        Candidate Management
+      </h4>
+      <p className="mt-1 text-sm text-slate-500">
+        Register and update candidates for available job openings.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => {
+        setShowCandidateForm(false);
+        setEditingCandidateId(null);
+        setCandidateForm({
+          fullName: "",
+          email: "",
+          phone: "",
+          skills: "",
+          jobOpeningId: "",
+        });
+        setShowCandidateForm(true);
+      }}
+      className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+    >
+      + Add Candidate
+    </button>
+  </div>
+
+  {showCandidateForm && (
+    <form
+      onSubmit={handleCreateCandidate}
+      className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2"
+    >
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-slate-700">
+          Full Name
+        </label>
+        <input
+          name="fullName"
+          value={candidateForm.fullName}
+          onChange={handleCandidateInputChange}
+          placeholder="Enter candidate name"
+          required
+          className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-slate-700">
+          Email
+        </label>
+        <input
+          type="email"
+          name="email"
+          value={candidateForm.email}
+          onChange={handleCandidateInputChange}
+          placeholder="candidate@example.com"
+          required
+          className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-slate-700">
+          Phone
+        </label>
+        <input
+          type="tel"
+          name="phone"
+          value={candidateForm.phone}
+          onChange={handleCandidateInputChange}
+          placeholder="Enter phone number"
+          className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-semibold text-slate-700">
+          Skills
+        </label>
+        <input
+          name="skills"
+          value={candidateForm.skills}
+          onChange={handleCandidateInputChange}
+          placeholder="Java, React, SQL"
+          className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+        />
+      </div>
+
+      <div className="md:col-span-2">
+        <label className="mb-2 block text-sm font-semibold text-slate-700">
+          Job Opening
+        </label>
+        <select
+          name="jobOpeningId"
+          value={candidateForm.jobOpeningId}
+          onChange={handleCandidateInputChange}
+          required
+          disabled={editingCandidateId !== null}
+          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm disabled:bg-slate-100"
+        >
+          <option value="">Select a job opening</option>
+
+          {jobOpenings
+            .filter((job) => job.status === "OPEN")
+            .map((job) => (
+              <option key={job.id} value={job.id}>
+                {job.title} — {job.location}
+              </option>
+            ))}
+        </select>
+
+        {editingCandidateId !== null && (
+          <p className="mt-1 text-xs text-slate-500">
+            Job opening cannot be changed while editing.
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-3 md:col-span-2">
+        <button
+          type="submit"
+          disabled={
+            recruitmentLoading ||
+            (
+              editingCandidateId === null &&
+              jobOpenings.filter((job) => job.status === "OPEN").length === 0
+            )
+          }
+          className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {recruitmentLoading
+            ? "Saving..."
+            : editingCandidateId !== null
+              ? "Update Candidate"
+              : "Add Candidate"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowCandidateForm(false);
+            setEditingCandidateId(null);
+            setCandidateForm({
+              fullName: "",
+              email: "",
+              phone: "",
+              skills: "",
+              jobOpeningId: "",
+            });
+          }}
+          className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  )}
+</div>
+
+{/* Candidates Table */}
+<div
+  id="candidates-section"
+  className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+>  
+          <div className="flex flex-col gap-4 border-b border-slate-100 p-6 md:flex-row">
+            {/* Search by candidate name or email */}
+            <div className="flex-1">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Search Candidates
+              </label>
+              <input
+                type="text"
+                value={candidateSearch}
+                onChange={(event) => setCandidateSearch(event.target.value)}
+                placeholder="Search by name or email..."
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500"
+              />
             </div>
 
-            {showCandidateForm && (
-              <form
-                onSubmit={handleCreateCandidate}
-                className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2"
+            {/* Filter by application status */}
+            <div className="w-full md:w-64">
+              <label className="mb-2 block text-sm font-semibold text-slate-700">
+                Filter by Status
+              </label>
+              <select
+                value={candidateStatusFilter}
+                onChange={(event) => setCandidateStatusFilter(event.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500"
               >
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Full Name
-                  </label>
-                  <input
-                    name="fullName"
-                    value={candidateForm.fullName}
-                    onChange={handleCandidateInputChange}
-                    placeholder="Enter candidate name"
-                    required
-                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
-                  />
-                </div>
+                <option value="ALL">All Statuses</option>
+                <option value="APPLIED">Applied</option>
+                <option value="SCREENING">Screening</option>
+                <option value="INTERVIEW">Interview</option>
+                <option value="SELECTED">Selected</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
+          </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={candidateForm.email}
-                    onChange={handleCandidateInputChange}
-                    placeholder="candidate@example.com"
-                    required
-                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
-                  />
-                </div>
+            <div className="border-b border-slate-100 p-6">
+              <h4 className="text-lg font-bold text-slate-900">
+                Candidates
+              </h4>
+              <p className="mt-1 text-sm text-slate-500">
+                Track applicants and their application status.
+              </p>
+            </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Phone
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={candidateForm.phone}
-                    onChange={handleCandidateInputChange}
-                    placeholder="Enter phone number"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
-                  />
-                </div>
+  
+          {filteredCandidates.length === 0 ? (
+            <p className="py-10 text-center text-sm text-slate-500">
+              {candidates.length === 0
+                ? "No candidates have applied yet."
+                : "No candidates match your search or selected status."}
+            </p>
+) : (
 
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Skills
-                  </label>
-                  <input
-                    name="skills"
-                    value={candidateForm.skills}
-                    onChange={handleCandidateInputChange}
-                    placeholder="Java, React, SQL"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
-                  />
-                </div>
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <tr>
+            <th className="px-5 py-4">Candidate</th>
+            <th className="px-5 py-4">Email</th>
+            <th className="px-5 py-4">Phone</th>
+            <th className="px-5 py-4">Skills</th>
+            <th className="px-5 py-4">Job ID</th>
+            <th className="px-5 py-4">Status</th>
+            <th className="px-5 py-4">Actions</th>
+          </tr>
+        </thead>
 
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Job Opening
-                  </label>
-                  <select
-                    name="jobOpeningId"
-                    value={candidateForm.jobOpeningId}
-                    onChange={handleCandidateInputChange}
-                    required
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
-                  >
-                    <option value="">Select a job opening</option>
+        <tbody className="divide-y divide-slate-100">
+              {filteredCandidates.map((candidate) => (           
+             <tr key={candidate.id} className="hover:bg-slate-50">
+              <td className="px-5 py-4">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCandidate(candidate)}
+                  className="font-semibold text-blue-600 hover:underline"
+                >
+                  {candidate.fullName}
+                </button>
+              </td>
 
-                    {jobOpenings
-                      .filter((job) => job.status === "OPEN")
-                      .map((job) => (
-                        <option key={job.id} value={job.id}>
-                          {job.title} — {job.location}
-                        </option>
-                      ))}
-                  </select>
-                </div>
+              <td className="px-5 py-4 text-slate-600">
+                {candidate.email}
+              </td>
 
-                <div className="flex gap-3 md:col-span-2">
-                  <button
-                    type="submit"
-                    disabled={recruitmentLoading || jobOpenings.filter(
-                      (job) => job.status === "OPEN"
-                    ).length === 0}
-                    className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    Save Candidate
-                  </button>
+              <td className="px-5 py-4 text-slate-600">
+                {candidate.phone || "-"}
+              </td>
+
+              <td className="px-5 py-4 text-slate-600">
+                {candidate.skills || "-"}
+              </td>
+
+              <td className="px-5 py-4 text-slate-600">
+                {candidate.jobOpeningId}
+              </td>
+
+              <td className="px-5 py-4">
+                <select
+                  value={candidate.status}
+                  onChange={(event) =>
+                    handleUpdateCandidateStatus(
+                      candidate.id,
+                      event.target.value
+                    )
+                  }
+                  disabled={recruitmentLoading}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500"
+                >
+                  <option value="APPLIED">Applied</option>
+                  <option value="SCREENING">Screening</option>
+                  <option value="INTERVIEW">Interview</option>
+                  <option value="SELECTED">Selected</option>
+                  <option value="REJECTED">Rejected</option>
+                </select>
+              </td>
+
+              <td className="whitespace-nowrap px-5 py-4">
+                <button
+                  type="button"
+                  onClick={() => handleEditCandidate(candidate)}
+                  disabled={recruitmentLoading}
+                  className="mr-2 rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                >
+                  Edit
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCandidate(candidate.id)}
+                  disabled={recruitmentLoading}
+                  className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  
+            {selectedCandidate && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">
+                        {selectedCandidate.fullName}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {selectedCandidate.email}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCandidate(null)}
+                      className="rounded-lg px-3 py-1 text-slate-500 hover:bg-slate-100"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="mt-6 space-y-4">
+                    <div>
+                      <p className="text-sm text-slate-500">Phone</p>
+                      <p className="font-medium text-slate-800">
+                        {selectedCandidate.phone || "Not provided"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-slate-500">Skills</p>
+                      <p className="font-medium text-slate-800">
+                        {selectedCandidate.skills || "Not provided"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-slate-500">Applied Job</p>
+                      <p className="font-medium text-slate-800">
+                        {jobOpenings.find(
+                          (job) => Number(job.id) === Number(selectedCandidate.jobOpeningId)
+                        )?.title || "Unknown job"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-slate-500">Job Location</p>
+                      <p className="font-medium text-slate-800">
+                        {jobOpenings.find(
+                          (job) => Number(job.id) === Number(selectedCandidate.jobOpeningId)
+                        )?.location || "Not available"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-slate-500">Application Status</p>
+                      <p className="font-semibold text-blue-600">
+                        {selectedCandidate.status || "APPLIED"}
+                      </p>
+                    </div>
+                  </div>
 
                   <button
                     type="button"
-                    onClick={() => setShowCandidateForm(false)}
-                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => setSelectedCandidate(null)}
+                    className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700"
                   >
-                    Cancel
+                    Close
                   </button>
                 </div>
-              </form>
-            )}
-          </div>
-
-
-
-            {/* Candidates Table */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-100 p-6">
-                <h4 className="text-lg font-bold text-slate-900">Candidates</h4>
-                <p className="mt-1 text-sm text-slate-500">
-                  Track applicants and their application status.
-                </p>
               </div>
+            )}
 
-              {candidates.length === 0 ? (
-                <p className="py-10 text-center text-sm text-slate-500">
-                  No candidates have applied yet.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                      <tr>
-                        <th className="px-5 py-4">Candidate</th>
-                        <th className="px-5 py-4">Email</th>
-                        <th className="px-5 py-4">Phone</th>
-                        <th className="px-5 py-4">Skills</th>
-                        <th className="px-5 py-4">Job ID</th>
-                        <th className="px-5 py-4">Status</th>
-                        <th className="px-5 py-4">Actions</th>
-                      </tr>
-                    </thead>
 
-                    <tbody className="divide-y divide-slate-100">
-                      {candidates.map((candidate) => (
-                        <tr key={candidate.id} className="hover:bg-slate-50">
-                          <td className="px-5 py-4 font-semibold text-slate-800">
-                            {candidate.fullName}
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {candidate.email}
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {candidate.phone || "-"}
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {candidate.skills || "-"}
-                          </td>
-                          <td className="px-5 py-4 text-slate-600">
-                            {candidate.jobOpeningId}
-                          </td>
-                          <td className="px-5 py-4">
-                          <select
-                            value={candidate.status}
-                            onChange={(event) =>
-                              handleUpdateCandidateStatus(candidate.id, event.target.value)
-                            }
-                            disabled={recruitmentLoading}
-                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500"
-                          >
-                            <option value="APPLIED">Applied</option>
-                            <option value="SCREENING">Screening</option>
-                            <option value="INTERVIEW">Interview</option>
-                            <option value="SELECTED">Selected</option>
-                            <option value="REJECTED">Rejected</option>
-                          </select>
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-4">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCandidate(candidate.id)}
-                              disabled={recruitmentLoading}
-                              className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </section>
+
+</div>
+</section>
+
+
+
+
 
 
 
@@ -2673,6 +3216,8 @@ return (
 
 
   </section>
+
+
 )}
 
 

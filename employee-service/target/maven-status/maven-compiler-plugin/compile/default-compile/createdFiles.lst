@@ -2,6 +2,7 @@ com\nexushr\employeeservice\employee\EmployeeRepository.class
 com\nexushr\employeeservice\SecurityConfig.class
 com\nexushr\employeeservice\EmployeeServiceApplication.class
 com\nexushr\employeeservice\exception\EmployeeNotFoundException.class
+com\nexushr\employeeservice\recruitment\RecruitmentExceptionHandler.class
 com\nexushr\employeeservice\attendance\AttendanceController.class
 com\nexushr\employeeservice\attendance\AttendanceRepository.class
 com\nexushr\employeeservice\attendance\MarkAttendanceRequest.class
