@@ -39,6 +39,11 @@ spring:
           predicates:
             - Path=/api/recruitment/**
 
+        - id: payroll-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/payroll/**
+
 logging:
   level:
     org.springframework.security: DEBUG

@@ -7,6 +7,7 @@ const navigation = [
   { name: 'Leave Management', icon: '▣' },
   { name: 'Performance', icon: '▥' },
   { name: 'Recruitment', icon: '▤' },
+  { name: 'Payroll', icon: '₹' },
   { name: 'Departments', icon: '▦' },
   { name: 'Reports', icon: '▧' },
   { name: 'Settings', icon: '⚙' },
@@ -74,6 +75,27 @@ const [performanceError, setPerformanceError] = useState("");
 
 const [jobOpenings, setJobOpenings] = useState([]);
 const [candidates, setCandidates] = useState([]);
+const [interviews, setInterviews] = useState([]);
+const [showInterviewForm, setShowInterviewForm] = useState(false);
+const [interviewForm, setInterviewForm] = useState({
+  candidateId: "",
+  interviewDate: "",
+  interviewTime: "",
+  interviewerName: "",
+  meetingLink: "",
+  notes: "",
+});
+const [payrollRecords, setPayrollRecords] = useState([]);
+const [payrollLoading, setPayrollLoading] = useState(false);
+const [payrollError, setPayrollError] = useState("");
+const [payrollForm, setPayrollForm] = useState({
+  employeeId: "",
+  payPeriod: new Date().toISOString().slice(0, 7),
+  basicSalary: "",
+  hra: "",
+  allowances: "",
+  deductions: "",
+});
 
 
 
@@ -669,6 +691,298 @@ const handleEditPerformance = (review) => {
   setEditingPerformanceId(review.id);
 };
 
+const formatInterviewTime = (value) => {
+  if (!value) return "—";
+  if (typeof value === "string") return value.slice(0, 5);
+  if (Array.isArray(value)) {
+    const [hours, minutes] = value;
+    return `${String(hours).padStart(2, "0")}:${String(minutes ?? 0).padStart(2, "0")}`;
+  }
+  return String(value);
+};
+
+const formatMoney = (value) =>
+  Number(value || 0).toLocaleString("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  });
+
+const getEmployeeName = (employeeId) => {
+  const employee = employees.find(
+    (item) => Number(item.id) === Number(employeeId)
+  );
+  return employee?.name || `Employee #${employeeId}`;
+};
+
+const getCandidateName = (candidateId) => {
+  const candidate = candidates.find(
+    (item) => Number(item.id) === Number(candidateId)
+  );
+  return candidate?.fullName || `Candidate #${candidateId}`;
+};
+
+const handleInterviewInputChange = (event) => {
+  const { name, value } = event.target;
+  setInterviewForm((previous) => ({
+    ...previous,
+    [name]: value,
+  }));
+};
+
+const handleScheduleInterview = async (event) => {
+  event.preventDefault();
+  setRecruitmentError("");
+
+  if (
+    !interviewForm.candidateId ||
+    !interviewForm.interviewDate ||
+    !interviewForm.interviewTime ||
+    !interviewForm.interviewerName.trim()
+  ) {
+    setRecruitmentError("Candidate, date, time, and interviewer are required.");
+    return;
+  }
+
+  try {
+    setRecruitmentLoading(true);
+
+    const response = await fetch("/api/recruitment/interviews", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        candidateId: Number(interviewForm.candidateId),
+        interviewDate: interviewForm.interviewDate,
+        interviewTime:
+          interviewForm.interviewTime.length === 5
+            ? `${interviewForm.interviewTime}:00`
+            : interviewForm.interviewTime,
+        interviewerName: interviewForm.interviewerName.trim(),
+        meetingLink: interviewForm.meetingLink.trim(),
+        notes: interviewForm.notes.trim(),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = errorText;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorText;
+      } catch {
+        // keep text
+      }
+      throw new Error(errorMessage || "Failed to schedule interview");
+    }
+
+    setInterviewForm({
+      candidateId: "",
+      interviewDate: "",
+      interviewTime: "",
+      interviewerName: "",
+      meetingLink: "",
+      notes: "",
+    });
+    setShowInterviewForm(false);
+    await loadRecruitmentData();
+  } catch (error) {
+    setRecruitmentError(error.message);
+  } finally {
+    setRecruitmentLoading(false);
+  }
+};
+
+const handleUpdateInterviewStatus = async (interviewId, status) => {
+  setRecruitmentLoading(true);
+  setRecruitmentError("");
+
+  try {
+    const response = await fetch(
+      `/api/recruitment/interviews/${interviewId}/status?status=${encodeURIComponent(status)}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || "Failed to update interview status");
+    }
+
+    await loadRecruitmentData();
+  } catch (error) {
+    setRecruitmentError(error.message);
+  } finally {
+    setRecruitmentLoading(false);
+  }
+};
+
+const loadPayrollRecords = async () => {
+  setPayrollLoading(true);
+  setPayrollError("");
+
+  try {
+    const response = await fetch("/api/payroll", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Payroll request failed: HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    setPayrollRecords(Array.isArray(data) ? data : []);
+  } catch (error) {
+    setPayrollError(error.message);
+  } finally {
+    setPayrollLoading(false);
+  }
+};
+
+const handlePayrollInputChange = (event) => {
+  const { name, value } = event.target;
+  setPayrollForm((previous) => ({
+    ...previous,
+    [name]: value,
+  }));
+};
+
+const handleGeneratePayroll = async (event) => {
+  event.preventDefault();
+  setPayrollError("");
+
+  if (!payrollForm.employeeId || !payrollForm.payPeriod || !payrollForm.basicSalary) {
+    setPayrollError("Employee, pay period, and basic salary are required.");
+    return;
+  }
+
+  try {
+    setPayrollLoading(true);
+
+    const response = await fetch("/api/payroll", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        employeeId: Number(payrollForm.employeeId),
+        payPeriod: payrollForm.payPeriod,
+        basicSalary: Number(payrollForm.basicSalary),
+        hra: Number(payrollForm.hra || 0),
+        allowances: Number(payrollForm.allowances || 0),
+        deductions: Number(payrollForm.deductions || 0),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = errorText;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorText;
+      } catch {
+        // keep text
+      }
+      throw new Error(errorMessage || "Failed to generate payroll");
+    }
+
+    setPayrollForm({
+      employeeId: "",
+      payPeriod: new Date().toISOString().slice(0, 7),
+      basicSalary: "",
+      hra: "",
+      allowances: "",
+      deductions: "",
+    });
+    await loadPayrollRecords();
+  } catch (error) {
+    setPayrollError(error.message);
+  } finally {
+    setPayrollLoading(false);
+  }
+};
+
+const handleMarkPayrollPaid = async (id) => {
+  setPayrollError("");
+
+  try {
+    const response = await fetch(`/api/payroll/${id}/pay`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || "Failed to mark payroll as paid");
+    }
+
+    await loadPayrollRecords();
+  } catch (error) {
+    setPayrollError(error.message);
+  }
+};
+
+const handleDownloadPayslip = async (payroll) => {
+  const employeeName = getEmployeeName(payroll.employeeId);
+  const payslipWindow = window.open("", "_blank");
+
+  if (!payslipWindow) {
+    alert("Please allow pop-ups to view the payslip.");
+    return;
+  }
+
+  payslipWindow.document.write(`
+    <html>
+      <head>
+        <title>Payslip ${payroll.payPeriod}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
+          h1 { margin-bottom: 8px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+          th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+          .total { font-weight: bold; background: #f8fafc; }
+        </style>
+      </head>
+      <body>
+        <h1>NexusHR Payslip</h1>
+        <p>${employeeName} · Period ${payroll.payPeriod} · Status ${payroll.status}</p>
+        <table>
+          <tr><th>Component</th><th>Amount</th></tr>
+          <tr><td>Basic Salary</td><td>${formatMoney(payroll.basicSalary)}</td></tr>
+          <tr><td>HRA</td><td>${formatMoney(payroll.hra)}</td></tr>
+          <tr><td>Allowances</td><td>${formatMoney(payroll.allowances)}</td></tr>
+          <tr><td>Deductions</td><td>${formatMoney(payroll.deductions)}</td></tr>
+          <tr><td>Tax</td><td>${formatMoney(payroll.tax)}</td></tr>
+          <tr class="total"><td>Net Salary</td><td>${formatMoney(payroll.netSalary)}</td></tr>
+        </table>
+      </body>
+    </html>
+  `);
+  payslipWindow.document.close();
+  payslipWindow.focus();
+  payslipWindow.print();
+};
+
+const departmentGroups = employees.reduce((groups, employee) => {
+  const department = employee.department || "Unassigned";
+  if (!groups[department]) {
+    groups[department] = [];
+  }
+  groups[department].push(employee);
+  return groups;
+}, {});
+
 const handleDeletePerformance = async (id) => {
   if (!window.confirm("Are you sure you want to delete this review?")) {
     return;
@@ -703,13 +1017,18 @@ const loadRecruitmentData = async () => {
   setRecruitmentError("");
 
   try {
-    const [jobsResponse, candidatesResponse] = await Promise.all([
+    const [jobsResponse, candidatesResponse, interviewsResponse] = await Promise.all([
       fetch("/api/recruitment/jobs", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       }),
       fetch("/api/recruitment/candidates", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }),
+      fetch("/api/recruitment/interviews", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -726,11 +1045,19 @@ const loadRecruitmentData = async () => {
       );
     }
 
+    if (!interviewsResponse.ok) {
+      throw new Error(
+        `Interviews request failed: HTTP ${interviewsResponse.status}`
+      );
+    }
+
     const jobs = await jobsResponse.json();
     const candidateList = await candidatesResponse.json();
+    const interviewList = await interviewsResponse.json();
 
     setJobOpenings(jobs);
     setCandidates(candidateList);
+    setInterviews(Array.isArray(interviewList) ? interviewList : []);
   } catch (error) {
     console.error("Recruitment loading error:", error);
     setRecruitmentError(error.message);
@@ -1161,7 +1488,7 @@ useEffect(() => {
 
 
 useEffect(() => {
-  if (activePage === 'Leave Management') {
+  if (activePage === 'Leave Management' || activePage === 'Reports') {
     loadLeaveRequests()
   }
 }, [activePage])
@@ -1181,8 +1508,14 @@ const filteredEmployees = employees.filter((employee) =>
    
 
 useEffect(() => {
-  if (activePage === "Recruitment" && token) {
+  if ((activePage === "Recruitment" || activePage === "Reports") && token) {
     loadRecruitmentData();
+  }
+}, [activePage, token]);
+
+useEffect(() => {
+  if ((activePage === "Payroll" || activePage === "Reports") && token) {
+    loadPayrollRecords();
   }
 }, [activePage, token]);
 
@@ -2254,7 +2587,7 @@ return (
                               Interviews
                             </p>
                             <h3 className="mt-2 text-3xl font-bold text-slate-900">
-                              {interviewCandidates}
+                              {interviews.length || interviewCandidates}
                             </h3>
                           </div>
                           <div className="rounded-xl bg-amber-50 p-3 text-amber-600">
@@ -2307,13 +2640,22 @@ return (
                 
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowJobForm(!showJobForm)}
-                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-              >
-                {showJobForm ? "Cancel" : "+ Add Job Opening"}
-              </button>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowInterviewForm(!showInterviewForm)}
+                  className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  {showInterviewForm ? "Cancel Interview" : "+ Schedule Interview"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowJobForm(!showJobForm)}
+                  className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                >
+                  {showJobForm ? "Cancel" : "+ Add Job Opening"}
+                </button>
+              </div>
             </div>
 
             {/* Error Message */}
@@ -2322,6 +2664,178 @@ return (
                 {recruitmentError}
               </div>
             )}
+
+            {showInterviewForm && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h4 className="mb-5 text-lg font-bold text-slate-900">
+                  Schedule Interview
+                </h4>
+                <form
+                  onSubmit={handleScheduleInterview}
+                  className="grid grid-cols-1 gap-5 md:grid-cols-2"
+                >
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Candidate
+                    </label>
+                    <select
+                      name="candidateId"
+                      value={interviewForm.candidateId}
+                      onChange={handleInterviewInputChange}
+                      required
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+                    >
+                      <option value="">Select candidate</option>
+                      {candidates.map((candidate) => (
+                        <option key={candidate.id} value={candidate.id}>
+                          {candidate.fullName} ({candidate.status})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Interviewer
+                    </label>
+                    <input
+                      name="interviewerName"
+                      value={interviewForm.interviewerName}
+                      onChange={handleInterviewInputChange}
+                      placeholder="e.g. Priya Sharma"
+                      required
+                      className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      name="interviewDate"
+                      value={interviewForm.interviewDate}
+                      onChange={handleInterviewInputChange}
+                      required
+                      className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Time
+                    </label>
+                    <input
+                      type="time"
+                      name="interviewTime"
+                      value={interviewForm.interviewTime}
+                      onChange={handleInterviewInputChange}
+                      required
+                      className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Meeting link
+                    </label>
+                    <input
+                      name="meetingLink"
+                      value={interviewForm.meetingLink}
+                      onChange={handleInterviewInputChange}
+                      placeholder="https://meet.google.com/..."
+                      className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">
+                      Notes
+                    </label>
+                    <input
+                      name="notes"
+                      value={interviewForm.notes}
+                      onChange={handleInterviewInputChange}
+                      placeholder="Round 1 technical"
+                      className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <button
+                      type="submit"
+                      disabled={recruitmentLoading}
+                      className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {recruitmentLoading ? "Saving..." : "Save Interview"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h4 className="mb-4 text-lg font-bold text-slate-900">
+                Scheduled Interviews
+              </h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b bg-slate-50 text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">Candidate</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Time</th>
+                      <th className="px-4 py-3">Interviewer</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {interviews.map((interview) => (
+                      <tr key={interview.id}>
+                        <td className="px-4 py-3 font-medium text-slate-800">
+                          {getCandidateName(interview.candidateId)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {interview.interviewDate || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {formatInterviewTime(interview.interviewTime)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {interview.interviewerName}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                            {interview.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateInterviewStatus(interview.id, "COMPLETED")}
+                              className="rounded-lg bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                            >
+                              Complete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateInterviewStatus(interview.id, "CANCELLED")}
+                              className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {interviews.length === 0 && (
+                      <tr>
+                        <td colSpan="6" className="px-4 py-8 text-center text-slate-500">
+                          No interviews scheduled yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
                 {/* Add Job Opening Form */}
       {showJobForm && (
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -2961,6 +3475,293 @@ return (
 
 
 
+) : activePage === "Payroll" ? (
+  <section className="space-y-6">
+    <div>
+      <h3 className="text-2xl font-bold text-slate-900">Payroll Processing</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Generate salary, apply tax, and export payslips.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-slate-500">Payroll Runs</p>
+        <h4 className="mt-2 text-3xl font-bold text-slate-900">{payrollRecords.length}</h4>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-slate-500">Paid</p>
+        <h4 className="mt-2 text-3xl font-bold text-emerald-600">
+          {payrollRecords.filter((item) => item.status === "PAID").length}
+        </h4>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-slate-500">Net Payout</p>
+        <h4 className="mt-2 text-2xl font-bold text-blue-600">
+          {formatMoney(
+            payrollRecords.reduce((sum, item) => sum + Number(item.netSalary || 0), 0)
+          )}
+        </h4>
+      </div>
+    </div>
+
+    {payrollError && (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        {payrollError}
+      </div>
+    )}
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h4 className="mb-5 text-lg font-bold text-slate-900">Generate Payroll</h4>
+      <form onSubmit={handleGeneratePayroll} className="grid grid-cols-1 gap-5 md:grid-cols-3">
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Employee</label>
+          <select
+            name="employeeId"
+            value={payrollForm.employeeId}
+            onChange={handlePayrollInputChange}
+            required
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"
+          >
+            <option value="">Select employee</option>
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Pay period</label>
+          <input
+            type="month"
+            name="payPeriod"
+            value={payrollForm.payPeriod}
+            onChange={handlePayrollInputChange}
+            required
+            className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Basic salary</label>
+          <input
+            type="number"
+            min="1"
+            name="basicSalary"
+            value={payrollForm.basicSalary}
+            onChange={handlePayrollInputChange}
+            required
+            className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">HRA</label>
+          <input
+            type="number"
+            min="0"
+            name="hra"
+            value={payrollForm.hra}
+            onChange={handlePayrollInputChange}
+            className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Allowances</label>
+          <input
+            type="number"
+            min="0"
+            name="allowances"
+            value={payrollForm.allowances}
+            onChange={handlePayrollInputChange}
+            className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Deductions</label>
+          <input
+            type="number"
+            min="0"
+            name="deductions"
+            value={payrollForm.deductions}
+            onChange={handlePayrollInputChange}
+            className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"
+          />
+        </div>
+        <div className="md:col-span-3">
+          <button
+            type="submit"
+            disabled={payrollLoading}
+            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {payrollLoading ? "Calculating..." : "Calculate & Save"}
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <table className="w-full text-left text-sm">
+        <thead className="border-b bg-slate-50 text-slate-500">
+          <tr>
+            <th className="px-4 py-3">Employee</th>
+            <th className="px-4 py-3">Period</th>
+            <th className="px-4 py-3">Gross / Tax / Net</th>
+            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {payrollRecords.map((payroll) => (
+            <tr key={payroll.id}>
+              <td className="px-4 py-3 font-medium text-slate-800">
+                {getEmployeeName(payroll.employeeId)}
+              </td>
+              <td className="px-4 py-3 text-slate-600">{payroll.payPeriod}</td>
+              <td className="px-4 py-3 text-slate-600">
+                {formatMoney(
+                  Number(payroll.basicSalary || 0) +
+                    Number(payroll.hra || 0) +
+                    Number(payroll.allowances || 0)
+                )}{" "}
+                / {formatMoney(payroll.tax)} / {formatMoney(payroll.netSalary)}
+              </td>
+              <td className="px-4 py-3">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    payroll.status === "PAID"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {payroll.status}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  {payroll.status !== "PAID" && (
+                    <button
+                      type="button"
+                      onClick={() => handleMarkPayrollPaid(payroll.id)}
+                      className="rounded-lg bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                    >
+                      Mark paid
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPayslip(payroll)}
+                    className="rounded-lg bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+                  >
+                    Payslip
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {payrollRecords.length === 0 && (
+            <tr>
+              <td colSpan="5" className="px-4 py-8 text-center text-slate-500">
+                {payrollLoading ? "Loading payroll..." : "No payroll records yet."}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </section>
+) : activePage === "Departments" ? (
+  <section className="space-y-6">
+    <div>
+      <h3 className="text-2xl font-bold text-slate-900">Departments</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Employees grouped by department.
+      </p>
+    </div>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {Object.entries(departmentGroups).map(([department, members]) => (
+        <div key={department} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h4 className="text-lg font-bold text-slate-900">{department}</h4>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+              {members.length} people
+            </span>
+          </div>
+          <ul className="mt-4 space-y-2">
+            {members.map((member) => (
+              <li key={member.id} className="text-sm text-slate-600">
+                {member.name} · {member.designation || "No designation"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {Object.keys(departmentGroups).length === 0 && (
+        <p className="text-sm text-slate-500">No employees available yet.</p>
+      )}
+    </div>
+  </section>
+) : activePage === "Reports" ? (
+  <section className="space-y-6">
+    <div>
+      <h3 className="text-2xl font-bold text-slate-900">Workforce Reports</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Live snapshot of employees, leave, recruitment, and payroll.
+      </p>
+    </div>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-slate-500">Employees</p>
+        <h4 className="mt-2 text-3xl font-bold">{employees.length}</h4>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-slate-500">Pending Leave</p>
+        <h4 className="mt-2 text-3xl font-bold">
+          {leaveRequests.filter((item) => item.status === "PENDING").length}
+        </h4>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-slate-500">Open Jobs</p>
+        <h4 className="mt-2 text-3xl font-bold">{openJobOpenings}</h4>
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-slate-500">Payroll Paid</p>
+        <h4 className="mt-2 text-3xl font-bold">
+          {payrollRecords.filter((item) => item.status === "PAID").length}
+        </h4>
+      </div>
+    </div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h4 className="mb-3 text-lg font-bold">Export</h4>
+      <p className="text-sm text-slate-500">
+        Open Payroll and use Payslip to print or save as PDF. Recruitment and
+        employee lists can be copied from their pages for Excel.
+      </p>
+    </div>
+  </section>
+) : activePage === "Settings" ? (
+  <section className="space-y-6">
+    <div>
+      <h3 className="text-2xl font-bold text-slate-900">Settings</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Session and workspace options.
+      </p>
+    </div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <p className="text-sm text-slate-600">
+        You are signed in with a JWT session stored in this browser tab.
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          sessionStorage.removeItem("nexushr_token");
+          setToken("");
+        }}
+        className="mt-4 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
+      >
+        Sign out
+      </button>
+    </div>
+  </section>
 ) : (
 
   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

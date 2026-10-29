@@ -13,9 +13,8 @@ public class Interview {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "candidate_id", nullable = false)
-    private Candidate candidate;
+    @Column(name = "candidate_id", nullable = false)
+    private Long candidateId;
 
     @Column(nullable = false)
     private LocalDate interviewDate;
@@ -41,12 +40,16 @@ public class Interview {
         return id;
     }
 
-    public Candidate getCandidate() {
-        return candidate;
+    public void setId(Long id) {
+        this.id = id;
     }
 
-    public void setCandidate(Candidate candidate) {
-        this.candidate = candidate;
+    public Long getCandidateId() {
+        return candidateId;
+    }
+
+    public void setCandidateId(Long candidateId) {
+        this.candidateId = candidateId;
     }
 
     public LocalDate getInterviewDate() {
