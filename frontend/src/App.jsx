@@ -1617,12 +1617,6 @@ return (
               <p className="text-xs text-slate-400">System Administrator</p>
             </div>
           </div>
-          <button
-            onClick={() => setActivePage('Login')}
-            className="mt-3 w-full rounded-lg px-3 py-2 text-left text-sm text-slate-300 hover:bg-white/10"
-          >
-            ↪ Sign out
-          </button>
         </div>
       </aside>
 
@@ -3740,12 +3734,6 @@ return (
   </section>
 ) : activePage === "Settings" ? (
   <section className="space-y-6">
-    <div>
-      <h3 className="text-2xl font-bold text-slate-900">Settings</h3>
-      <p className="mt-1 text-sm text-slate-500">
-        Session and workspace options.
-      </p>
-    </div>
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <p className="text-sm text-slate-600">
         You are signed in with a JWT session stored in this browser tab.
@@ -4022,7 +4010,7 @@ return (
 )}
 
 
-          {/* Recent employees */}
+          {activePage === 'Dashboard' && (
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-5">
               <div>
@@ -4084,6 +4072,7 @@ return (
               Showing {filteredEmployees.length} of {employees.length} sample employees
             </div>
           </section>
+          )}
 
           <footer className="pb-2 text-center text-xs text-slate-400">
             © 2026 NexusHR · Workforce Intelligence Platform
