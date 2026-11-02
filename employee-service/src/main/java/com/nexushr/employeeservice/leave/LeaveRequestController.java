@@ -1,44 +1,67 @@
-
 package com.nexushr.employeeservice.leave;
 
+import com.nexushr.employeeservice.security.CurrentUserService;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/leaves")
 public class LeaveRequestController {
 
     private final LeaveRequestService leaveRequestService;
+    private final CurrentUserService currentUserService;
 
     public LeaveRequestController(
-            LeaveRequestService leaveRequestService) {
+            LeaveRequestService leaveRequestService,
+            CurrentUserService currentUserService) {
         this.leaveRequestService = leaveRequestService;
+        this.currentUserService = currentUserService;
     }
 
-    // Employee applies for leave
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public LeaveRequest applyForLeave(
-            @RequestBody LeaveRequest request) {
+    public LeaveRequest applyForLeave(@RequestBody LeaveRequest request) {
         return leaveRequestService.applyForLeave(request);
     }
 
-    // Get one employee's leave history
+    @GetMapping("/me")
+    public List<LeaveRequest> ownLeaveHistory() {
+        return leaveRequestService.getEmployeeLeaveHistory(
+                currentUserService.requireOwnEmployeeId());
+    }
+
+    @GetMapping("/me/balance")
+    public Map<String, Object> ownBalance() {
+        return leaveRequestService.getBalance(currentUserService.requireOwnEmployeeId());
+    }
+
     @GetMapping("/employee/{employeeId}")
-    public List<LeaveRequest> getEmployeeLeaveHistory(
-            @PathVariable Long employeeId) {
+    public List<LeaveRequest> getEmployeeLeaveHistory(@PathVariable Long employeeId) {
         return leaveRequestService.getEmployeeLeaveHistory(employeeId);
     }
 
-    // Get all leave requests
+    @GetMapping("/employee/{employeeId}/balance")
+    public Map<String, Object> getBalance(@PathVariable Long employeeId) {
+        return leaveRequestService.getBalance(employeeId);
+    }
+
     @GetMapping
     public List<LeaveRequest> getAllLeaveRequests() {
         return leaveRequestService.getAllLeaveRequests();
     }
 
-    // Approve or reject a leave request
     @PutMapping("/{id}/status")
     public LeaveRequest updateLeaveStatus(
             @PathVariable Long id,
@@ -48,8 +71,7 @@ public class LeaveRequestController {
 
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public String handleIllegalArgument(
-            IllegalArgumentException exception) {
-        return exception.getMessage();
+    public Map<String, String> handleIllegalArgument(IllegalArgumentException exception) {
+        return Map.of("message", exception.getMessage());
     }
 }

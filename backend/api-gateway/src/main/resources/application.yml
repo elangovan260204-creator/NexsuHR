@@ -1,5 +1,4 @@
-﻿
-server:
+﻿server:
   port: 8080
 
 spring:
@@ -7,48 +6,88 @@ spring:
     name: api-gateway
   cloud:
     gateway:
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 65s
+      default-filters: []
       routes:
         - id: auth-service
           uri: http://localhost:8082
           predicates:
             - Path=/api/auth/**
+          metadata:
+            sensitiveHeaders: ""
 
         - id: employee-service
           uri: http://localhost:8081
           predicates:
             - Path=/api/employees/**
+          metadata:
+            sensitiveHeaders: ""
+
+        - id: dashboard-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/dashboard/**
+          metadata:
+            sensitiveHeaders: ""
 
         - id: attendance-service
           uri: http://localhost:8081
           predicates:
             - Path=/api/attendance/**
+          metadata:
+            sensitiveHeaders: ""
 
         - id: leave-service
           uri: http://localhost:8081
           predicates:
             - Path=/api/leaves/**
+          metadata:
+            sensitiveHeaders: ""
 
         - id: performance-service
           uri: http://localhost:8081
           predicates:
             - Path=/api/performance/**
+          metadata:
+            sensitiveHeaders: ""
 
-        
         - id: recruitment-service
           uri: http://localhost:8081
           predicates:
             - Path=/api/recruitment/**
+          metadata:
+            sensitiveHeaders: ""
 
         - id: payroll-service
           uri: http://localhost:8081
           predicates:
             - Path=/api/payroll/**
+          metadata:
+            sensitiveHeaders: ""
 
         - id: ai-insights-service
           uri: http://localhost:8081
           predicates:
             - Path=/api/ai-insights/**
+          metadata:
+            sensitiveHeaders: ""
+
+        - id: ai-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/ai/**
+          metadata:
+            sensitiveHeaders: ""
+
+        - id: employee-health
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/health
+          metadata:
+            sensitiveHeaders: ""
 
 logging:
   level:
-    org.springframework.security: DEBUG
+    org.springframework.cloud.gateway: INFO

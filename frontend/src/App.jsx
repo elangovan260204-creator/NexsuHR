@@ -1,64 +1,116 @@
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-const navigation = [
+const adminNavigation = [
   { name: 'Dashboard', icon: '⌂' },
   { name: 'Employees', icon: '♟' },
   { name: 'Attendance', icon: '▦' },
   { name: 'Leave Management', icon: '▣' },
-  { name: 'Performance', icon: '▥' },
-  { name: 'AI Insights', icon: '✦' },
-  { name: 'Recruitment', icon: '▤' },
   { name: 'Payroll', icon: '₹' },
-  { name: 'Departments', icon: '▦' },
-  { name: 'Reports', icon: '▧' },
+  { name: 'Performance', icon: '▥' },
+  { name: 'Recruitment', icon: '▤' },
+  { name: 'AI Insights', icon: '✦' },
   { name: 'Settings', icon: '⚙' },
 ]
 
-const employees = [
-  { id: 1, name: 'Arun Kumar', role: 'Software Engineer', department: 'Engineering', email: 'arun.kumar@nexushr.com', status: 'Active', date: '12 Oct 2026', initials: 'AK', color: 'bg-blue-100 text-blue-700' },
-  { id: 2, name: 'Priya Sharma', role: 'HR Executive', department: 'Human Resources', email: 'priya.sharma@nexushr.com', status: 'Active', date: '10 Oct 2026', initials: 'PS', color: 'bg-pink-100 text-pink-700' },
-  { id: 3, name: 'Karthik Raj', role: 'Sales Manager', department: 'Sales', email: 'karthik.raj@nexushr.com', status: 'Active', date: '08 Oct 2026', initials: 'KR', color: 'bg-amber-100 text-amber-700' },
-  { id: 4, name: 'Divya S', role: 'Marketing Specialist', department: 'Marketing', email: 'divya.s@nexushr.com', status: 'Active', date: '05 Oct 2026', initials: 'DS', color: 'bg-purple-100 text-purple-700' },
-  { id: 5, name: 'Vignesh M', role: 'Finance Analyst', department: 'Finance', email: 'vignesh.m@nexushr.com', status: 'Active', date: '01 Oct 2026', initials: 'VM', color: 'bg-emerald-100 text-emerald-700' },
+const employeeNavigation = [
+  { name: 'My Dashboard', icon: '⌂' },
+  { name: 'My Profile', icon: '♟' },
+  { name: 'My Attendance', icon: '▦' },
+  { name: 'My Leaves', icon: '▣' },
+  { name: 'My Performance', icon: '▥' },
+  { name: 'My Payroll', icon: '₹' },
+  { name: 'Settings', icon: '⚙' },
 ]
 
-const stats = [
-  { label: 'Total Employees', value: '125', change: '+12%', icon: '♟', style: 'bg-blue-50 text-blue-600' },
-  { label: 'Present Today', value: '98', change: '+8%', icon: '✓', style: 'bg-emerald-50 text-emerald-600' },
-  { label: 'On Leave', value: '12', change: '-4%', icon: '◷', style: 'bg-amber-50 text-amber-600' },
-  { label: 'Open Positions', value: '8', change: '+25%', icon: '▣', style: 'bg-violet-50 text-violet-600' },
-]
+function parseApiMessage(text, fallback) {
+  try {
+    const data = JSON.parse(text)
+    return data.message || data.error || text || fallback
+  } catch {
+    return text || fallback
+  }
+}
 
-const attendance = [
-  { day: 'Mon', present: 82, absent: 18 },
-  { day: 'Tue', present: 78, absent: 18 },
-  { day: 'Wed', present: 79, absent: 18 },
-  { day: 'Thu', present: 79, absent: 18 },
-  { day: 'Fri', present: 78, absent: 18 },
-  { day: 'Sat', present: 40, absent: 18 },
-  { day: 'Sun', present: 35, absent: 18 },
-]
+function formatDisplayDate(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString()
+}
 
-const activities = [
-  { icon: '♟', title: 'New employee joined', detail: 'Arun Kumar joined Engineering', time: '2 hours ago', color: 'bg-emerald-100 text-emerald-700' },
-  { icon: '▦', title: 'Leave request approved', detail: "Priya's leave request approved", time: '4 hours ago', color: 'bg-blue-100 text-blue-700' },
-  { icon: '▣', title: 'Department updated', detail: 'New Sales team created', time: '1 day ago', color: 'bg-violet-100 text-violet-700' },
-  { icon: '●', title: 'Profile updated', detail: 'Employee profile information updated', time: '1 day ago', color: 'bg-amber-100 text-amber-700' },
-]
+function getUserFromToken(token) {
+  try {
+    const payload = token.split('.')[1];
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decodedPayload = atob(normalizedPayload);
+    const bytes = Uint8Array.from(decodedPayload, (character) => character.charCodeAt(0));
+    const decoded = JSON.parse(new TextDecoder().decode(bytes));
+
+    return {
+      username: decoded.sub || decoded.username || 'User',
+      role: String(decoded.role || decoded.authorities?.[0] || '')
+        .replace(/^ROLE_/, '')
+        .toUpperCase(),
+    };
+  } catch (error) {
+    console.error('Unable to read user details from JWT:', error);
+    return null;
+  }
+}
 
 function App() {
    const [token, setToken] = useState(
     () => sessionStorage.getItem('nexushr_token') || ''
   )
-  const [activePage, setActivePage] = useState('Dashboard')
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedToken = sessionStorage.getItem('nexushr_token');
+    return savedToken ? getUserFromToken(savedToken) : null;
+  })
+  const [myProfile, setMyProfile] = useState(null)
+  const [profileError, setProfileError] = useState('')
+  const [dashboardStats, setDashboardStats] = useState(null)
+  const [dashboardError, setDashboardError] = useState('')
+  const [leaveBalance, setLeaveBalance] = useState(null)
+  const [authMode, setAuthMode] = useState('login')
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
+  const [passwordMessage, setPasswordMessage] = useState('')
+  const [loginForm, setLoginForm] = useState({ username: '', email: '', password: '' })
+  const [accountUsers, setAccountUsers] = useState([])
+  const [loginCreateForm, setLoginCreateForm] = useState({
+    username: '',
+    email: '',
+    password: '',
+  })
+  const [activePage, setActivePage] = useState(() => {
+    const savedToken = sessionStorage.getItem('nexushr_token');
+    const savedUser = savedToken ? getUserFromToken(savedToken) : null;
+    return savedUser?.role === 'ADMIN' ? 'Dashboard' : 'My Dashboard';
+  })
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
+  const isAdmin = (currentUser?.role || '').toUpperCase() === 'ADMIN'
+  const navigation = isAdmin ? adminNavigation : employeeNavigation
+  const userInitials = (currentUser?.username || 'U').slice(0, 2).toUpperCase()
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+  const todayIso = new Date().toLocaleDateString('en-CA')
   const [editingId, setEditingId] = useState(null)
 const [attendanceRecords, setAttendanceRecords] = useState([])
 const [attendanceLoading, setAttendanceLoading] = useState(false)
 const [selectedEmployeeId, setSelectedEmployeeId] = useState('')
+const todayAttendance = attendanceRecords.find(
+  (record) => record.attendanceDate === todayIso
+)
 
 const [leaveRequests, setLeaveRequests] = useState([])
 const [leaveLoading, setLeaveLoading] = useState(false)
@@ -360,23 +412,24 @@ const loadAttendance = async (employeeId) => {
   setAttendanceLoading(true);
 
   try {
-    const response = await fetch(
-      `/api/attendance/employee/${employeeId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const url = isAdmin && employeeId
+      ? `/api/attendance/employee/${employeeId}`
+      : '/api/attendance/me';
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     if (!response.ok) {
+      const text = await response.text();
       throw new Error(
-        `Failed to load attendance: HTTP ${response.status}`
+        parseApiMessage(text, `Failed to load attendance: HTTP ${response.status}`)
       );
     }
 
     const data = await response.json();
-    setAttendanceRecords(data);
+    setAttendanceRecords(Array.isArray(data) ? data : []);
   } catch (error) {
     console.error('Error loading attendance:', error);
     alert(error.message);
@@ -391,20 +444,20 @@ const loadAttendance = async (employeeId) => {
 
 const handleCheckIn = async (employeeId) => {
   try {
-    const response = await fetch(
-  `/api/attendance/check-in/${employeeId}`,
-  {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  }
-);
+    const url = isAdmin && employeeId
+      ? `/api/attendance/check-in/${employeeId}`
+      : '/api/attendance/me/check-in';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     const message = await response.text()
 
 if (!response.ok) {
-  throw new Error(message || 'Check-in failed')
+  throw new Error(parseApiMessage(message, 'Check-in failed'))
 }
 
     alert('Check-in successful!')
@@ -422,7 +475,9 @@ if (!response.ok) {
 const handleCheckOut = async (employeeId) => {
   try {
     const response = await fetch(
-      `/api/attendance/check-out/${employeeId}`,
+      isAdmin && employeeId
+        ? `/api/attendance/check-out/${employeeId}`
+        : '/api/attendance/me/check-out',
       {
         method: 'PUT',
         headers: {
@@ -501,7 +556,7 @@ const loadLeaveRequests = async () => {
   setLeaveLoading(true)
 
   try {
-    const response = await fetch('/api/leaves', {
+    const response = await fetch(isAdmin ? '/api/leaves' : '/api/leaves/me', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -525,7 +580,7 @@ const loadLeaveRequests = async () => {
 const handleApplyLeave = async (event) => {
   event.preventDefault()
 
-  if (!leaveEmployeeId || !leaveStartDate || !leaveEndDate || !leaveReason.trim()) {
+  if ((isAdmin && !leaveEmployeeId) || !leaveStartDate || !leaveEndDate || !leaveReason.trim()) {
     alert('Please fill in all leave details')
     return
   }
@@ -543,7 +598,7 @@ const handleApplyLeave = async (event) => {
            Authorization: `Bearer ${token}`,
      },
       body: JSON.stringify({
-        employeeId: Number(leaveEmployeeId),
+        employeeId: isAdmin ? Number(leaveEmployeeId) : undefined,
         startDate: leaveStartDate,
         endDate: leaveEndDate,
         reason: leaveReason.trim(),
@@ -838,7 +893,7 @@ const loadPayrollRecords = async () => {
   setPayrollError("");
 
   try {
-    const response = await fetch("/api/payroll", {
+    const response = await fetch(isAdmin ? "/api/payroll" : "/api/payroll/me", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -1399,12 +1454,12 @@ const handleDeleteJob = async (jobId) => {
 
 
 
+const authHeaders = () => ({
+  Authorization: `Bearer ${token}`,
+})
+
 const handleLogin = async (event) => {
   event.preventDefault();
-
-  const form = event.currentTarget;
-  const username = form.username.value.trim();
-  const password = form.password.value;
 
   try {
     const response = await fetch('/api/auth/login', {
@@ -1412,12 +1467,15 @@ const handleLogin = async (event) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({
+        username: loginForm.username.trim(),
+        password: loginForm.password,
+      }),
     });
 
     const responseText = await response.text();
-
     let data;
+
     try {
       data = JSON.parse(responseText);
     } catch {
@@ -1425,22 +1483,31 @@ const handleLogin = async (event) => {
     }
 
     if (!response.ok) {
-      throw new Error(data.message || 'Login failed');
+      throw new Error(data.message || `Login failed: HTTP ${response.status}`);
     }
 
     if (!data.token) {
       throw new Error('Login response did not contain a token');
     }
 
-    // Save the new JWT token
+    const user = getUserFromToken(data.token);
+
+    if (!user || !user.role) {
+      throw new Error(
+        'Login succeeded, but the role could not be read from the JWT. Check that the Auth Service includes a role claim.'
+      );
+    }
+
     sessionStorage.setItem('nexushr_token', data.token);
-
-    // Update React state
+    setCurrentUser(user);
     setToken(data.token);
+    setActivePage(user.role === 'ADMIN' ? 'Dashboard' : 'My Dashboard');
+    setLoginForm({ username: '', email: '', password: '' });
 
-    alert('Login successful!');
+    alert(`Welcome ${user.username}!`);
   } catch (error) {
-    alert(error.message);
+    console.error('Login error:', error);
+    alert(error.message || 'Login failed');
   }
 };
 
@@ -1453,10 +1520,13 @@ const handleLogin = async (event) => {
 
 
 useEffect(() => {
-  if (!token) {
+  if (!token || !isAdmin) {
+    setEmployees([]);
     setLoading(false);
     return;
   }
+
+  setLoading(true);
 
   fetch('/api/employees', {
     headers: {
@@ -1493,7 +1563,7 @@ useEffect(() => {
     .finally(() => {
       setLoading(false);
     });
-}, [token]);
+}, [token, isAdmin]);
 
 
 
@@ -1558,6 +1628,53 @@ const filteredEmployees = employees.filter((employee) =>
     .toLowerCase()
     .includes(search.toLowerCase())
 )
+
+// Dashboard data used by the Admin Dashboard cards and charts.
+const stats = [
+  {
+    label: "Total Employees",
+    value: employees.length,
+    icon: "♟",
+    style: "bg-blue-100 text-blue-700",
+    change: "Live",
+  },
+  {
+    label: "Open Positions",
+    value: jobOpenings.filter((job) => job.status === "OPEN").length,
+    icon: "▤",
+    style: "bg-emerald-100 text-emerald-700",
+    change: "Live",
+  },
+  {
+    label: "Total Candidates",
+    value: candidates.length,
+    icon: "♧",
+    style: "bg-amber-100 text-amber-700",
+    change: "Live",
+  },
+  {
+    label: "Performance Reviews",
+    value: performanceReviews.length,
+    icon: "▥",
+    style: "bg-violet-100 text-violet-700",
+    change: "Live",
+  },
+];
+
+// Placeholder weekly chart values until attendance analytics are connected.
+const attendance = [
+  { day: "Mon", present: 82, absent: 18 },
+  { day: "Tue", present: 88, absent: 12 },
+  { day: "Wed", present: 85, absent: 15 },
+  { day: "Thu", present: 91, absent: 9 },
+  { day: "Fri", present: 87, absent: 13 },
+  { day: "Sat", present: 72, absent: 28 },
+  { day: "Sun", present: 0, absent: 0 },
+];
+
+// Activity feed is empty until backend activity data is available.
+const activities = [];
+
    
 
 useEffect(() => {
@@ -1634,6 +1751,13 @@ return (
               type="text"
               required
               autoComplete="username"
+              value={loginForm.username}
+              onChange={(event) =>
+                setLoginForm((previous) => ({
+                  ...previous,
+                  username: event.target.value,
+                }))
+              }
               className="w-full rounded-lg border p-3"
               placeholder="Enter your username"
             />
@@ -1648,6 +1772,13 @@ return (
               type="password"
               required
               autoComplete="current-password"
+              value={loginForm.password}
+              onChange={(event) =>
+                setLoginForm((previous) => ({
+                  ...previous,
+                  password: event.target.value,
+                }))
+              }
               className="w-full rounded-lg border p-3"
               placeholder="Enter your password"
             />
@@ -3829,6 +3960,9 @@ return (
         onClick={() => {
           sessionStorage.removeItem("nexushr_token");
           setToken("");
+          setCurrentUser(null);
+          setEmployees([]);
+          setActivePage('Dashboard');
         }}
         className="mt-4 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
       >

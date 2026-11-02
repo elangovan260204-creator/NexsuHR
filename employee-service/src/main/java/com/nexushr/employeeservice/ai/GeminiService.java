@@ -1,4 +1,3 @@
-
 package com.nexushr.employeeservice.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -15,6 +14,10 @@ import java.util.Map;
 
 @Service
 public class GeminiService {
+
+    private static final String GEMINI_URL =
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+                    + "gemini-3.5-flash:generateContent";
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -34,12 +37,6 @@ public class GeminiService {
                     "GEMINI_API_KEY environment variable is not configured");
         }
 
-        
-            String url =
-                    "https://generativelanguage.googleapis.com/v1beta/models/"
-                    + "gemini-3.5-flash:generateContent?key=" + apiKey;
-
-
         Map<String, Object> requestBody = Map.of(
                 "contents", List.of(
                         Map.of("parts", List.of(
@@ -51,9 +48,10 @@ public class GeminiService {
         String jsonBody = objectMapper.writeValueAsString(requestBody);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
+                .uri(URI.create(GEMINI_URL))
                 .timeout(Duration.ofSeconds(60))
                 .header("Content-Type", "application/json")
+                .header("x-goog-api-key", apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build();
 
@@ -61,18 +59,15 @@ public class GeminiService {
                 request, HttpResponse.BodyHandlers.ofString());
 
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-    throw new IllegalStateException(
-            "Gemini API request failed with HTTP "
-            + response.statusCode()
-            + ": " + response.body());
-}
+            throw new IllegalStateException(
+                    "Gemini API request failed with HTTP " + response.statusCode());
+        }
 
         JsonNode root = objectMapper.readTree(response.body());
         JsonNode textNode = root.at("/candidates/0/content/parts/0/text");
 
         if (textNode.isMissingNode() || textNode.isNull()) {
-            throw new IllegalStateException(
-                    "Gemini returned no text. Check the API response.");
+            throw new IllegalStateException("Gemini returned no text.");
         }
 
         return textNode.asText();

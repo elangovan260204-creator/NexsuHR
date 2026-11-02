@@ -37,7 +37,7 @@ public class JobOpeningService {
     public JobOpening getJobById(Long id) {
         return jobOpeningRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException(
+                        new IllegalArgumentException(
                                 "Job opening not found with ID: " + id));
     }
 

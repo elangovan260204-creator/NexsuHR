@@ -14,4 +14,6 @@ public interface AttendanceRepository
             Long employeeId,
             LocalDate attendanceDate
     );
+
+    List<Attendance> findByAttendanceDate(LocalDate attendanceDate);
 }

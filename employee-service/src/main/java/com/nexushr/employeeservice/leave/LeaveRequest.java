@@ -1,7 +1,12 @@
-
 package com.nexushr.employeeservice.leave;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -14,6 +19,8 @@ public class LeaveRequest {
     private Long id;
 
     private Long employeeId;
+
+    private String leaveType = "ANNUAL";
 
     private LocalDate startDate;
 
@@ -31,6 +38,12 @@ public class LeaveRequest {
     @PrePersist
     public void onCreate() {
         appliedAt = LocalDateTime.now();
+        if (status == null || status.isBlank()) {
+            status = "PENDING";
+        }
+        if (leaveType == null || leaveType.isBlank()) {
+            leaveType = "ANNUAL";
+        }
     }
 
     public Long getId() {
@@ -43,6 +56,14 @@ public class LeaveRequest {
 
     public void setEmployeeId(Long employeeId) {
         this.employeeId = employeeId;
+    }
+
+    public String getLeaveType() {
+        return leaveType;
+    }
+
+    public void setLeaveType(String leaveType) {
+        this.leaveType = leaveType;
     }
 
     public LocalDate getStartDate() {

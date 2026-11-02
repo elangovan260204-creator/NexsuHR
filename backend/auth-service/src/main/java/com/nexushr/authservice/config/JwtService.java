@@ -1,4 +1,3 @@
-
 package com.nexushr.authservice.config;
 
 import io.jsonwebtoken.Claims;
@@ -10,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.Locale;
 
 @Service
 public class JwtService {
@@ -26,16 +26,25 @@ public class JwtService {
     }
 
     public String generateToken(String username, String role) {
+        return generateToken(username, role, null);
+    }
+
+    public String generateToken(String username, String role, String email) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(username)
-                .claim("role", role)
+                .claim("role", normalizeRole(role))
                 .issuedAt(now)
                 .expiration(expiry)
-                .signWith(getSigningKey())
-                .compact();
+                .signWith(getSigningKey());
+
+        if (email != null && !email.isBlank()) {
+            builder.claim("email", email.trim().toLowerCase(Locale.ROOT));
+        }
+
+        return builder.compact();
     }
 
     public String extractUsername(String token) {
@@ -44,7 +53,6 @@ public class JwtService {
 
     public boolean isTokenValid(String token, String username) {
         Claims claims = extractClaims(token);
-
         return claims.getSubject().equals(username)
                 && claims.getExpiration().after(new Date());
     }
@@ -58,6 +66,17 @@ public class JwtService {
     }
 
     public String extractRole(String token) {
-    return extractClaims(token).get("role", String.class);
-}
+        return normalizeRole(extractClaims(token).get("role", String.class));
+    }
+
+    public static String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return null;
+        }
+        String normalized = role.trim();
+        if (normalized.regionMatches(true, 0, "ROLE_", 0, 5)) {
+            normalized = normalized.substring(5);
+        }
+        return normalized.toUpperCase(Locale.ROOT);
+    }
 }

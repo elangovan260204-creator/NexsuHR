@@ -6,14 +6,19 @@ D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\attendance
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\attendance\AttendanceRepository.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\attendance\AttendanceService.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\attendance\MarkAttendanceRequest.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\dashboard\DashboardController.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\dashboard\DashboardService.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\dto\EmployeeResponseDTO.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\employee\Employee.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\employee\EmployeeController.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\employee\EmployeeRepository.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\employee\EmployeeService.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\EmployeeServiceApplication.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\exception\ConflictException.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\exception\EmployeeNotFoundException.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\exception\ForbiddenOperationException.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\exception\GlobalExceptionHandler.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\HealthController.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\JwtAuthenticationFilter.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\leave\LeaveRequest.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\leave\LeaveRequestController.java
@@ -40,4 +45,7 @@ D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\recruitmen
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\recruitment\JobOpeningRepository.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\recruitment\JobOpeningService.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\recruitment\RecruitmentExceptionHandler.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\security\CurrentUserService.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\security\JwtUser.java
+D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\security\RoleNames.java
 D:\NexusHR\employee-service\src\main\java\com\nexushr\employeeservice\SecurityConfig.java

@@ -1,6 +1,6 @@
-
 package com.nexushr.employeeservice;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -14,61 +14,64 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(
-            JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(
-            HttpSecurity http) throws Exception {
-
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
-
             .sessionManagement(session ->
-                session.sessionCreationPolicy(
-                    SessionCreationPolicy.STATELESS
-                )
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
-
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/health").permitAll()
 
-                // Employee management: Admin only
+                .requestMatchers(HttpMethod.GET, "/api/employees/me")
+                    .hasAnyRole("ADMIN", "EMPLOYEE")
                 .requestMatchers("/api/employees/**")
-                .hasRole("ADMIN")
+                    .hasRole("ADMIN")
 
-                // Attendance: authenticated users for now
-                .requestMatchers("/api/attendance/**")
-                .hasAnyRole("ADMIN", "EMPLOYEE")
+                .requestMatchers("/api/attendance", "/api/attendance/**")
+                    .hasAnyRole("ADMIN", "EMPLOYEE")
 
-                // Leave management: authenticated users for now
-                .requestMatchers("/api/leaves/**")
-                .hasAnyRole("ADMIN", "EMPLOYEE")
+                .requestMatchers("/api/leaves", "/api/leaves/**")
+                    .hasAnyRole("ADMIN", "EMPLOYEE")
 
-                // Performance: authenticated users for now
-                .requestMatchers("/api/performance/**")
-                .hasAnyRole("ADMIN", "EMPLOYEE")
+                .requestMatchers("/api/performance", "/api/performance/**")
+                    .hasAnyRole("ADMIN", "EMPLOYEE")
 
-                // Recruitment: Admin only
                 .requestMatchers("/api/recruitment/**")
-                .hasRole("ADMIN")
+                    .hasRole("ADMIN")
 
-                // Payroll: Admin only for now
+                .requestMatchers(HttpMethod.GET, "/api/payroll/me", "/api/payroll/me/**")
+                    .hasAnyRole("ADMIN", "EMPLOYEE")
                 .requestMatchers("/api/payroll/**")
-                .hasRole("ADMIN")
+                    .hasRole("ADMIN")
 
-                // AI Insights: Admin only
-                .requestMatchers("/api/ai-insights/**")
-                .hasRole("ADMIN")
+                .requestMatchers("/api/ai-insights/**", "/api/ai/**")
+                    .hasRole("ADMIN")
 
-                // Everything else requires authentication
+                .requestMatchers("/api/dashboard/**")
+                    .hasRole("ADMIN")
+
                 .anyRequest().authenticated()
             )
-
+            .exceptionHandling(exception -> exception
+                .authenticationEntryPoint((request, response, ex) -> {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"message\":\"Authentication required\"}");
+                })
+                .accessDeniedHandler((request, response, ex) -> {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"message\":\"Access denied\"}");
+                })
+            )
             .formLogin(form -> form.disable())
             .httpBasic(basic -> basic.disable())
-
             .addFilterBefore(
                 jwtAuthenticationFilter,
                 UsernamePasswordAuthenticationFilter.class

@@ -1,6 +1,8 @@
 
 package com.nexushr.authservice.user;
 
+import com.nexushr.authservice.config.JwtService;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,12 +12,15 @@ public class AuthService {
 
     private final AppUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     public AuthService(
             AppUserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            JdbcTemplate jdbcTemplate) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Transactional
@@ -45,22 +50,76 @@ public class AuthService {
                     "Username already exists");
         }
 
-        if (userRepository.existsByEmail(email.trim())) {
+        if (userRepository.existsByEmailIgnoreCase(email.trim())) {
             throw new IllegalArgumentException(
                     "Email already exists");
         }
 
-        if (role == null || !role.matches("ADMIN|EMPLOYEE")) {
+        String normalizedRole = JwtService.normalizeRole(role);
+        if (!"EMPLOYEE".equals(normalizedRole)) {
             throw new IllegalArgumentException(
-                    "Role must be ADMIN or EMPLOYEE");
+                    "Self-registration is limited to the EMPLOYEE role");
+        }
+
+        String normalizedEmail = email.trim().toLowerCase();
+        if (!employeeProfileExists(normalizedEmail)) {
+            throw new IllegalArgumentException(
+                    "No employee profile found for this email. Ask an administrator to create your employee record first.");
         }
 
         AppUser user = new AppUser();
         user.setUsername(username.trim());
-        user.setEmail(email.trim().toLowerCase());
+        user.setEmail(normalizedEmail);
         user.setPassword(passwordEncoder.encode(rawPassword));
-        user.setRole(role);
-
+        user.setRole("EMPLOYEE");
         return userRepository.save(user);
+    }
+
+    @Transactional
+    public AppUser createEmployeeLogin(
+            String username,
+            String email,
+            String rawPassword) {
+        return register(username, email, rawPassword, "EMPLOYEE");
+    }
+
+    @Transactional
+    public void changePassword(String username, String currentPassword, String newPassword) {
+        AppUser user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new IllegalArgumentException("Current password is incorrect");
+        }
+        if (newPassword == null || newPassword.length() < 8) {
+            throw new IllegalArgumentException("Password must contain at least 8 characters");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void adminResetPassword(String username, String newPassword) {
+        AppUser user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        if (newPassword == null || newPassword.length() < 8) {
+            throw new IllegalArgumentException("Password must contain at least 8 characters");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+
+    private boolean employeeProfileExists(String email) {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM employee WHERE LOWER(email) = LOWER(?)",
+                    Integer.class,
+                    email);
+            return count != null && count > 0;
+        } catch (Exception exception) {
+            throw new IllegalArgumentException(
+                    "Unable to verify employee profile. Try again or ask an administrator for help.");
+        }
     }
 }

@@ -37,16 +37,18 @@ public class LoginService {
             throw new BadCredentialsException("Invalid username or password");
         }
 
+        String role = JwtService.normalizeRole(user.getRole());
         String token = jwtService.generateToken(
                 user.getUsername(),
-                user.getRole()
+                role,
+                user.getEmail()
         );
 
         return new LoginResponse(
                 token,
                 user.getId(),
                 user.getUsername(),
-                user.getRole(),
+                role,
                 "Login successful"
         );
     }

@@ -1,5 +1,6 @@
-
 package com.nexushr.employeeservice.dto;
+
+import java.time.LocalDate;
 
 public class EmployeeResponseDTO {
 
@@ -8,17 +9,30 @@ public class EmployeeResponseDTO {
     private String email;
     private String department;
     private String designation;
+    private String phone;
+    private String status;
+    private LocalDate joiningDate;
 
     public EmployeeResponseDTO() {
     }
 
-    public EmployeeResponseDTO(Long id, String name, String email,
-                               String department, String designation) {
+    public EmployeeResponseDTO(
+            Long id,
+            String name,
+            String email,
+            String department,
+            String designation,
+            String phone,
+            String status,
+            LocalDate joiningDate) {
         this.id = id;
         this.name = name;
         this.email = email;
         this.department = department;
         this.designation = designation;
+        this.phone = phone;
+        this.status = status;
+        this.joiningDate = joiningDate;
     }
 
     public Long getId() {
@@ -59,5 +73,29 @@ public class EmployeeResponseDTO {
 
     public void setDesignation(String designation) {
         this.designation = designation;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public LocalDate getJoiningDate() {
+        return joiningDate;
+    }
+
+    public void setJoiningDate(LocalDate joiningDate) {
+        this.joiningDate = joiningDate;
     }
 }

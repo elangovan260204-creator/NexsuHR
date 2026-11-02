@@ -1,14 +1,18 @@
-
 package com.nexushr.employeeservice.employee;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
+import java.time.LocalDate;
+
 @Entity
+@Table(name = "employee")
 public class Employee {
 
     @Id
@@ -20,22 +24,22 @@ public class Employee {
 
     @Email
     @NotBlank
+    @Column(nullable = false)
     private String email;
 
     private String department;
 
     private String designation;
 
-    public Employee() {
-    }
+    private String phone;
 
-    public Employee(Long id, String name, String email,
-                    String department, String designation) {
-        this.id = id;
-        this.name = name;
-        this.email = email;
-        this.department = department;
-        this.designation = designation;
+    @Column(length = 20)
+    private String status = "ACTIVE";
+
+    @Column(name = "joining_date")
+    private LocalDate joiningDate;
+
+    public Employee() {
     }
 
     public Long getId() {
@@ -76,5 +80,29 @@ public class Employee {
 
     public void setDesignation(String designation) {
         this.designation = designation;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public LocalDate getJoiningDate() {
+        return joiningDate;
+    }
+
+    public void setJoiningDate(LocalDate joiningDate) {
+        this.joiningDate = joiningDate;
     }
 }

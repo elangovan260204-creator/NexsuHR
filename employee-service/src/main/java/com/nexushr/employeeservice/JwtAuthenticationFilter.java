@@ -1,25 +1,23 @@
-
 package com.nexushr.employeeservice;
 
+import com.nexushr.employeeservice.security.JwtUser;
+import com.nexushr.employeeservice.security.RoleNames;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.lang.NonNull;
-
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
@@ -39,9 +37,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(
-           @NonNull HttpServletRequest request,
-           @NonNull HttpServletResponse response,
-           @NonNull FilterChain filterChain)
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain)
             throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
@@ -61,42 +59,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     .getPayload();
 
             String username = claims.getSubject();
-            String role = claims.get("role", String.class);
+            String role = RoleNames.normalize(claims.get("role", String.class));
+            String email = claims.get("email", String.class);
             Date expiration = claims.getExpiration();
 
             if (username != null
                     && role != null
                     && expiration != null
                     && expiration.after(new Date())
-                    && SecurityContextHolder.getContext()
-                            .getAuthentication() == null) {
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
 
+                JwtUser principal = new JwtUser(username, email, role);
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
-                                username,
+                                principal,
                                 null,
-                                List.of(
-                                        new SimpleGrantedAuthority(
-                                                "ROLE_" + role)
-                                )
+                                List.of(new SimpleGrantedAuthority("ROLE_" + role))
                         );
 
-                SecurityContextHolder.getContext()
-                        .setAuthentication(authentication);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
-} catch (JwtException | IllegalArgumentException exception) {
-    System.err.println(
-        "JWT validation failed: " + exception.getClass().getSimpleName()
-    );
+        } catch (JwtException | IllegalArgumentException exception) {
+            SecurityContextHolder.clearContext();
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"message\":\"Invalid or expired JWT token\"}");
+            return;
+        }
 
-    SecurityContextHolder.clearContext();
-
-    response.sendError(
-        HttpServletResponse.SC_UNAUTHORIZED,
-        "Invalid or expired JWT token"
-    );
-    return;
-}
-filterChain.doFilter(request, response);
+        filterChain.doFilter(request, response);
     }
 }
