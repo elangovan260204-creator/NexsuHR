@@ -1,11 +1,13 @@
-
 import { useEffect, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 const navigation = [
   { name: 'Dashboard', icon: '⌂' },
   { name: 'Employees', icon: '♟' },
   { name: 'Attendance', icon: '▦' },
   { name: 'Leave Management', icon: '▣' },
   { name: 'Performance', icon: '▥' },
+  { name: 'AI Insights', icon: '✦' },
   { name: 'Recruitment', icon: '▤' },
   { name: 'Payroll', icon: '₹' },
   { name: 'Departments', icon: '▦' },
@@ -88,6 +90,14 @@ const [interviewForm, setInterviewForm] = useState({
 const [payrollRecords, setPayrollRecords] = useState([]);
 const [payrollLoading, setPayrollLoading] = useState(false);
 const [payrollError, setPayrollError] = useState("");
+const [aiSummary, setAiSummary] = useState(null);
+const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+const [aiSummaryError, setAiSummaryError] = useState("");
+const [aiSummaryRefresh, setAiSummaryRefresh] = useState(0);
+
+const [aiInsights, setAiInsights] = useState(null);
+const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
+const [aiInsightsError, setAiInsightsError] = useState("");
 const [payrollForm, setPayrollForm] = useState({
   employeeId: "",
   payPeriod: new Date().toISOString().slice(0, 7),
@@ -1500,6 +1510,49 @@ useEffect(() => {
   }
 }, [activePage, token]);
 
+
+useEffect(() => {
+  if (activePage !== "AI Insights" || !token) return;
+
+  const controller = new AbortController();
+  const loadAiSummary = async () => {
+    setAiSummaryLoading(true);
+    setAiSummaryError("");
+
+    try {
+      const response = await fetch('/api/ai-insights/summary', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          response.status === 401 || response.status === 403
+            ? 'Authentication failed. Please sign in again.'
+            : `Unable to load AI Insights summary (${response.status}).`
+        );
+      }
+
+      const data = await response.json();
+      setAiSummary(data);
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('AI Insights summary error:', error);
+        setAiSummaryError(error.message || 'Unable to load AI Insights data.');
+      }
+    } finally {
+      if (!controller.signal.aborted) setAiSummaryLoading(false);
+    }
+  };
+
+  loadAiSummary();
+  return () => controller.abort();
+}, [activePage, token, aiSummaryRefresh]);
+
 const filteredEmployees = employees.filter((employee) =>
   `${employee.name} ${employee.designation} ${employee.department} ${employee.email}`
     .toLowerCase()
@@ -1520,6 +1573,39 @@ useEffect(() => {
 }, [activePage, token]);
 
 
+useEffect(() => {
+  if (activePage !== 'AI Insights' || !token) return;
+
+  const fetchAIInsights = async () => {
+    setAiInsightsLoading(true);
+    setAiInsightsError("");
+
+    try {
+      const response = await fetch('/api/ai-insights/generate', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to generate AI insights');
+      }
+
+      setAiInsights(data.insight);
+    } catch (error) {
+      console.error('AI Insights Error:', error);
+      setAiInsightsError(error.message);
+    } finally {
+      setAiInsightsLoading(false);
+    }
+  };
+
+  fetchAIInsights();
+}, [activePage, token]);
 
 
 return (
@@ -4072,6 +4158,236 @@ return (
               Showing {filteredEmployees.length} of {employees.length} sample employees
             </div>
           </section>
+          )}
+
+          {activePage === 'AI Insights' && (
+            <section className="space-y-6">
+              <div className="rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-white to-blue-50 p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">NexusHR Workforce Intelligence</p>
+                    <h3 className="mt-2 text-2xl font-bold text-slate-900">AI Insights</h3>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Live workforce and attendance metrics from your NexusHR database.</p>
+                  </div>
+                  <span className={`inline-flex w-fit items-center rounded-full border px-3 py-1.5 text-xs font-semibold ${aiSummaryError ? 'border-red-200 bg-red-50 text-red-700' : aiSummaryLoading ? 'border-amber-200 bg-amber-50 text-amber-800' : aiSummary ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+                    {aiSummaryError ? 'Data unavailable' : aiSummaryLoading ? 'Loading live data…' : aiSummary ? 'Live database data' : 'Waiting for data'}
+                  </span>
+                </div>
+              </div>
+
+              {aiSummaryError && (
+                <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  <p className="font-semibold">Could not load the AI Insights summary.</p>
+                  <p className="mt-1">{aiSummaryError}</p>
+                  <button
+                    type="button"
+                    onClick={() => setAiSummaryRefresh((value) => value + 1)}
+                    className="mt-3 rounded-lg border border-red-300 px-3 py-1.5 font-semibold hover:bg-red-100"
+                  >
+                    Retry loading summary
+                  </button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { label: 'Total employees', value: aiSummary?.totalEmployees, detail: 'Employee records in database', icon: '♟', style: 'bg-blue-50 text-blue-600' },
+                  { label: 'Attendance rate', value: aiSummary ? `${Number(aiSummary.attendanceRate || 0).toFixed(2)}%` : '—', detail: 'Present ÷ present and absent records', icon: '✓', style: 'bg-emerald-50 text-emerald-600' },
+                  { label: 'Present records', value: aiSummary?.presentRecords, detail: 'Records marked Present', icon: '●', style: 'bg-violet-50 text-violet-600' },
+                  { label: 'Absent records', value: aiSummary?.absentRecords, detail: 'Records marked Absent', icon: '◷', style: 'bg-amber-50 text-amber-600' },
+                ].map((item) => (
+                  <article key={item.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-500">{item.label}</p>
+                        <p className="mt-3 text-2xl font-bold text-slate-900">{aiSummaryLoading ? '…' : item.value ?? '—'}</p>
+                        <p className="mt-1 text-xs text-slate-500">{item.detail}</p>
+                      </div>
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl ${item.style}`}>{item.icon}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              {aiSummary && (
+                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h4 className="font-bold text-slate-900">Attendance data overview</h4>
+                  <p className="mt-1 text-sm text-slate-500">Summary calculated from records stored in PostgreSQL.</p>
+                  <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <p className="text-sm text-slate-500">All attendance records</p>
+                      <p className="mt-1 text-xl font-bold text-slate-900">{aiSummary.totalAttendanceRecords ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <p className="text-sm text-slate-500">Classified records</p>
+                      <p className="mt-1 text-xl font-bold text-slate-900">{aiSummary.classifiedRecords ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <p className="text-sm text-slate-500">Other / unrecognized statuses</p>
+                      <p className="mt-1 text-xl font-bold text-slate-900">{Math.max(0, Number(aiSummary.totalAttendanceRecords || 0) - Number(aiSummary.classifiedRecords || 0))}</p>
+                    </div>
+                  </div>
+                </article>
+              )}
+
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="font-semibold text-amber-900">Sample recommendations are still demo content</p>
+                <p className="mt-1 text-sm leading-5 text-amber-800">Retention watchlists, skill coverage, and HR recommendations below are examples only. They are not calculated from your employee records and are not AI predictions. Next, we can replace these with Gemini insights based on the real metrics above.</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-slate-900">Retention watchlist</h4>
+                      <p className="mt-1 text-sm text-slate-500">Illustrative HR review prompts, not employee risk scores.</p>
+                    </div>
+                    <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">Sample only</span>
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    {[
+                      { title: 'Engagement check-in', detail: 'Schedule a confidential check-in with teams reporting low engagement.', tag: 'People support' },
+                      { title: 'Career growth review', detail: 'Review development goals and internal growth opportunities.', tag: 'Career growth' },
+                      { title: 'Workload review', detail: 'Check workload balance and overtime trends before drawing conclusions.', tag: 'Well-being' },
+                    ].map((item) => (
+                      <div key={item.title} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-semibold text-slate-800">{item.title}</p>
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">{item.tag}</span>
+                        </div>
+                        <p className="mt-2 text-sm leading-5 text-slate-600">{item.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h4 className="font-bold text-slate-900">Skill gap analysis</h4>
+                  <p className="mt-1 text-sm text-slate-500">Example development priorities; not sourced from employee data.</p>
+                  <div className="mt-6 space-y-5">
+                    {[
+                      { skill: 'Communication', level: 72, color: 'bg-blue-600' },
+                      { skill: 'Cloud fundamentals', level: 58, color: 'bg-violet-600' },
+                      { skill: 'Data analysis', level: 46, color: 'bg-amber-500' },
+                      { skill: 'Leadership', level: 64, color: 'bg-emerald-600' },
+                    ].map((item) => (
+                      <div key={item.skill}>
+                        <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                          <span className="font-medium text-slate-700">{item.skill}</span>
+                          <span className="text-slate-500">{item.level}% sample coverage</span>
+                        </div>
+                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label={`${item.skill} sample coverage`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.level}>
+                          <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.level}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </div>
+
+              <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h4 className="font-bold text-slate-900">Recommended HR actions</h4>
+                <p className="mt-1 text-sm text-slate-500">General examples only; not generated from your live database yet.</p>
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  {[
+                    { number: '01', title: 'Run pulse surveys', detail: 'Collect voluntary feedback and review team-level engagement trends.' },
+                    { number: '02', title: 'Create learning plans', detail: 'Agree on role-specific learning goals with employees and managers.' },
+                    { number: '03', title: 'Review trends fairly', detail: 'Use multiple data points and human review before employment decisions.' },
+                  ].map((item) => (
+                    <div key={item.number} className="rounded-xl border border-slate-100 p-4">
+                      <span className="text-xs font-bold tracking-wider text-indigo-600">{item.number}</span>
+                      <h5 className="mt-2 font-semibold text-slate-800">{item.title}</h5>
+                      <p className="mt-2 text-sm leading-5 text-slate-600">{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </article>
+
+               
+                {/* Gemini AI Insights */}
+                <article className="rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-bold text-slate-900">
+                        Gemini AI Workforce Analysis
+                      </h4>
+                      <p className="mt-1 text-sm text-slate-500">
+                        AI-generated analysis based on live NexusHR database metrics.
+                      </p>
+                    </div>
+
+                    <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                      Gemini AI
+                    </span>
+                  </div>
+
+                  {aiInsightsLoading && (
+                    <div className="mt-5 flex items-center gap-3 rounded-xl bg-slate-50 p-4">
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+                      <p className="text-sm text-slate-600">
+                        Gemini is analyzing your workforce data...
+                      </p>
+                    </div>
+                  )}
+
+                  {aiInsightsError && (
+                    <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4">
+                      <p className="font-semibold text-red-700">
+                        Unable to generate AI insights
+                      </p>
+                      <p className="mt-1 text-sm text-red-600">
+                        {aiInsightsError}
+                      </p>
+                    </div>
+                  )}
+
+                  {!aiInsightsLoading && !aiInsightsError && aiInsights && (
+                    <div className="mt-5 rounded-xl bg-slate-50 p-5">
+                     <div className="text-sm leading-7 text-slate-700">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h1: ({ ...props }) => (
+                            <h1 className="mb-4 text-xl font-bold text-slate-900" {...props} />
+                          ),
+                          h2: ({ ...props }) => (
+                            <h2 className="mb-3 mt-6 text-lg font-bold text-slate-900" {...props} />
+                          ),
+                          h3: ({ ...props }) => (
+                            <h3 className="mb-2 mt-5 text-base font-bold text-indigo-700" {...props} />
+                          ),
+                          p: ({ ...props }) => (
+                            <p className="mb-3" {...props} />
+                          ),
+                          ul: ({ ...props }) => (
+                            <ul className="mb-4 ml-6 list-disc space-y-2" {...props} />
+                          ),
+                          ol: ({ ...props }) => (
+                            <ol className="mb-4 ml-6 list-decimal space-y-2" {...props} />
+                          ),
+                          li: ({ ...props }) => (
+                            <li className="pl-1" {...props} />
+                          ),
+                          strong: ({ ...props }) => (
+                            <strong className="font-bold text-slate-900" {...props} />
+                          ),
+                          hr: () => <hr className="my-5 border-slate-200" />,
+                        }}
+                      >
+                        {aiInsights}
+                      </ReactMarkdown>
+                    </div>
+                    </div>
+                  )}
+
+                  {!aiInsightsLoading && !aiInsightsError && !aiInsights && (
+                    <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                      No AI insights available yet.
+                    </p>
+                  )}
+                </article>
+
+            </section>
           )}
 
           <footer className="pb-2 text-center text-xs text-slate-400">
