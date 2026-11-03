@@ -23,38 +23,58 @@ public class AdminInitializer {
 
         return args -> {
 
-            if (username.isBlank()
-                    || email.isBlank()
+            // Normalize admin credentials
+            String adminUsername = username.trim();
+            String adminEmail = email.trim().toLowerCase();
+
+            // Check whether admin credentials are configured
+            if (adminUsername.isBlank()
+                    || adminEmail.isBlank()
                     || password.isBlank()) {
+
                 System.out.println(
                     "Admin initialization skipped: credentials not configured.");
+
                 return;
             }
 
-            if (userRepository.existsByUsername(username)) {
+            // Check existing username
+            if (userRepository.existsByUsername(adminUsername)) {
+
                 System.out.println("Admin username already exists.");
+
                 return;
             }
 
-            if (userRepository.existsByEmail(email)) {
+            // Check existing email
+            if (userRepository.existsByEmail(adminEmail)) {
+
                 System.out.println("Admin email already exists.");
+
                 return;
             }
 
+            // Validate admin password
             if (password.length() < 12) {
+
                 throw new IllegalStateException(
                     "Admin password must contain at least 12 characters.");
             }
 
+            // Create admin account
             AppUser admin = new AppUser();
-            admin.setUsername(username.trim());
-            admin.setEmail(email.trim().toLowerCase());
+
+            admin.setUsername(adminUsername);
+            admin.setEmail(adminEmail);
             admin.setPassword(passwordEncoder.encode(password));
             admin.setRole("ADMIN");
 
+            // Save admin account
             userRepository.save(admin);
 
-            System.out.println("Initial Admin account created successfully.");
+            System.out.println(
+                "Initial Admin account created successfully.");
         };
     }
 }
+    

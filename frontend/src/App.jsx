@@ -79,7 +79,13 @@ function App() {
     confirmPassword: '',
   })
   const [passwordMessage, setPasswordMessage] = useState('')
+  const [passwordMessageType, setPasswordMessageType] = useState('')
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false)
   const [loginForm, setLoginForm] = useState({ username: '', email: '', password: '' })
+  const [registrationForm, setRegistrationForm] = useState({ username: '', email: '', password: '', confirmPassword: '' })
+  const [registrationMessage, setRegistrationMessage] = useState('')
+  const [registrationMessageType, setRegistrationMessageType] = useState('')
+  const [registrationSubmitting, setRegistrationSubmitting] = useState(false)
   const [accountUsers, setAccountUsers] = useState([])
   const [loginCreateForm, setLoginCreateForm] = useState({
     username: '',
@@ -1498,6 +1504,257 @@ const authHeaders = () => ({
   Authorization: `Bearer ${token}`,
 })
 
+const handleChangePassword = async (event) => {
+  event.preventDefault()
+  setPasswordMessage('')
+  setPasswordMessageType('')
+
+  const { currentPassword, newPassword, confirmPassword } = passwordForm
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    setPasswordMessage('Please fill in all password fields.')
+    setPasswordMessageType('error')
+    return
+  }
+
+  if (newPassword.length < 8) {
+    setPasswordMessage('New password must contain at least 8 characters.')
+    setPasswordMessageType('error')
+    return
+  }
+
+  if (newPassword !== confirmPassword) {
+    setPasswordMessage('New password and confirmation do not match.')
+    setPasswordMessageType('error')
+    return
+  }
+
+  if (currentPassword === newPassword) {
+    setPasswordMessage('Your new password must be different from your current password.')
+    setPasswordMessageType('error')
+    return
+  }
+
+  setPasswordSubmitting(true)
+
+  try {
+    const response = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    })
+
+    const responseText = await response.text()
+    let data = {}
+
+    try {
+      data = responseText ? JSON.parse(responseText) : {}
+    } catch {
+      data = { message: responseText }
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data.message ||
+        data.error ||
+        `Password update failed (HTTP ${response.status}).`
+      )
+    }
+
+    setPasswordForm({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    })
+    setPasswordMessage(data.message || 'Password updated successfully.')
+    setPasswordMessageType('success')
+  } catch (error) {
+    setPasswordMessage(
+      error.message || 'Unable to update password. Please try again.'
+    )
+    setPasswordMessageType('error')
+  } finally {
+    setPasswordSubmitting(false)
+  }
+}
+
+const renderChangePasswordSection = () => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div>
+      <h4 className="font-bold text-slate-900">Change Password</h4>
+      <p className="mt-1 text-sm text-slate-500">
+        Update your NexusHR sign-in password. Use at least 8 characters.
+      </p>
+    </div>
+
+    <form onSubmit={handleChangePassword} className="mt-5 space-y-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <label className="block text-sm font-medium text-slate-700">
+          Current Password
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            value={passwordForm.currentPassword}
+            onChange={(event) =>
+              setPasswordForm((previous) => ({
+                ...previous,
+                currentPassword: event.target.value,
+              }))
+            }
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            placeholder="Enter current password"
+          />
+        </label>
+
+        <label className="block text-sm font-medium text-slate-700">
+          New Password
+          <input
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+            value={passwordForm.newPassword}
+            onChange={(event) =>
+              setPasswordForm((previous) => ({
+                ...previous,
+                newPassword: event.target.value,
+              }))
+            }
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            placeholder="At least 8 characters"
+          />
+        </label>
+
+        <label className="block text-sm font-medium text-slate-700">
+          Confirm New Password
+          <input
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+            value={passwordForm.confirmPassword}
+            onChange={(event) =>
+              setPasswordForm((previous) => ({
+                ...previous,
+                confirmPassword: event.target.value,
+              }))
+            }
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            placeholder="Re-enter new password"
+          />
+        </label>
+      </div>
+
+      {passwordMessage && (
+        <p
+          role="status"
+          aria-live="polite"
+          className={`rounded-lg px-4 py-3 text-sm ${
+            passwordMessageType === 'success'
+              ? 'border border-green-200 bg-green-50 text-green-700'
+              : 'border border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {passwordMessage}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          disabled={passwordSubmitting}
+          className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {passwordSubmitting ? 'Updating...' : 'Update Password'}
+        </button>
+
+        <button
+          type="button"
+          disabled={passwordSubmitting}
+          onClick={() => {
+            setPasswordForm({
+              currentPassword: '',
+              newPassword: '',
+              confirmPassword: '',
+            })
+            setPasswordMessage('')
+            setPasswordMessageType('')
+          }}
+          className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+        >
+          Clear
+        </button>
+      </div>
+    </form>
+  </div>
+)
+
+const handleRegister = async (event) => {
+  event.preventDefault();
+  setRegistrationMessage('');
+  setRegistrationMessageType('');
+
+  const username = registrationForm.username.trim();
+  const email = registrationForm.email.trim().toLowerCase();
+  const password = registrationForm.password;
+
+  if (!username || !email || !password) {
+    setRegistrationMessage('Please complete all required fields.');
+    setRegistrationMessageType('error');
+    return;
+  }
+
+  if (password.length < 8) {
+    setRegistrationMessage('Password must contain at least 8 characters.');
+    setRegistrationMessageType('error');
+    return;
+  }
+
+  if (password !== registrationForm.confirmPassword) {
+    setRegistrationMessage('Passwords do not match.');
+    setRegistrationMessageType('error');
+    return;
+  }
+
+  setRegistrationSubmitting(true);
+
+  try {
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password }),
+    });
+
+    const responseText = await response.text();
+    let data;
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      data = { message: responseText };
+    }
+
+    if (!response.ok) {
+      throw new Error(data.message || data.error || `Registration failed: HTTP ${response.status}`);
+    }
+
+    setRegistrationMessage(data.message || 'Registration successful. You can now sign in.');
+    setRegistrationMessageType('success');
+    setRegistrationForm({ username: '', email: '', password: '', confirmPassword: '' });
+    setLoginForm({ username, email: '', password: '' });
+    setAuthMode('login');
+  } catch (error) {
+    setRegistrationMessage(error.message || 'Registration failed.');
+    setRegistrationMessageType('error');
+  } finally {
+    setRegistrationSubmitting(false);
+  }
+};
+
 const handleLogin = async (event) => {
   event.preventDefault();
 
@@ -1797,69 +2054,95 @@ useEffect(() => {
 return (
   <>
     {!token ? (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-        <form
-          onSubmit={handleLogin}
-          className="w-full max-w-md space-y-5 rounded-2xl bg-white p-8 shadow-xl"
-        >
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-slate-900">
-              NexusHR
-            </h1>
-            <p className="mt-2 text-slate-500">
-              Sign in to your workforce dashboard
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-8">
+        {authMode === 'register' ? (
+          <form onSubmit={handleRegister} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-8 shadow-xl">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-slate-900">Employee Registration</h1>
+              <p className="mt-2 text-slate-500">Create your NexusHR employee login</p>
+            </div>
+
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
+              Your employee profile must already exist. Register using the same email address created by your administrator.
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Username</label>
+              <input name="username" type="text" required minLength={3} autoComplete="username" value={registrationForm.username}
+                onChange={(event) => setRegistrationForm((previous) => ({ ...previous, username: event.target.value }))}
+                className="w-full rounded-lg border p-3" placeholder="Choose a username" />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Employee Email</label>
+              <input name="email" type="email" required autoComplete="email" value={registrationForm.email}
+                onChange={(event) => setRegistrationForm((previous) => ({ ...previous, email: event.target.value }))}
+                className="w-full rounded-lg border p-3" placeholder="Enter your registered employee email" />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Password</label>
+              <input name="password" type="password" required minLength={8} autoComplete="new-password" value={registrationForm.password}
+                onChange={(event) => setRegistrationForm((previous) => ({ ...previous, password: event.target.value }))}
+                className="w-full rounded-lg border p-3" placeholder="At least 8 characters" />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">Confirm Password</label>
+              <input name="confirmPassword" type="password" required minLength={8} autoComplete="new-password" value={registrationForm.confirmPassword}
+                onChange={(event) => setRegistrationForm((previous) => ({ ...previous, confirmPassword: event.target.value }))}
+                className="w-full rounded-lg border p-3" placeholder="Re-enter your password" />
+            </div>
+
+            {registrationMessage && (
+              <p role="alert" className={`rounded-lg border p-3 text-sm ${registrationMessageType === 'success' ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                {registrationMessage}
+              </p>
+            )}
+
+            <button type="submit" disabled={registrationSubmitting}
+              className="w-full rounded-lg bg-blue-600 p-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+              {registrationSubmitting ? 'Creating Account...' : 'Register'}
+            </button>
+
+            <p className="text-center text-sm text-slate-600">
+              Already have an account?{' '}
+              <button type="button" onClick={() => { setAuthMode('login'); setRegistrationMessage(''); }} className="font-semibold text-blue-600 hover:underline">
+                Sign In
+              </button>
             </p>
-          </div>
+          </form>
+        ) : (
+          <form onSubmit={handleLogin} className="w-full max-w-md space-y-5 rounded-2xl bg-white p-8 shadow-xl">
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-slate-900">NexusHR</h1>
+              <p className="mt-2 text-slate-500">Sign in to your workforce dashboard</p>
+            </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Username
-            </label>
-            <input
-              name="username"
-              type="text"
-              required
-              autoComplete="username"
-              value={loginForm.username}
-              onChange={(event) =>
-                setLoginForm((previous) => ({
-                  ...previous,
-                  username: event.target.value,
-                }))
-              }
-              className="w-full rounded-lg border p-3"
-              placeholder="Enter your username"
-            />
-          </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Username</label>
+              <input name="username" type="text" required autoComplete="username" value={loginForm.username}
+                onChange={(event) => setLoginForm((previous) => ({ ...previous, username: event.target.value }))}
+                className="w-full rounded-lg border p-3" placeholder="Enter your username" />
+            </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium">
-              Password
-            </label>
-            <input
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={loginForm.password}
-              onChange={(event) =>
-                setLoginForm((previous) => ({
-                  ...previous,
-                  password: event.target.value,
-                }))
-              }
-              className="w-full rounded-lg border p-3"
-              placeholder="Enter your password"
-            />
-          </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Password</label>
+              <input name="password" type="password" required autoComplete="current-password" value={loginForm.password}
+                onChange={(event) => setLoginForm((previous) => ({ ...previous, password: event.target.value }))}
+                className="w-full rounded-lg border p-3" placeholder="Enter your password" />
+            </div>
 
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-blue-600 p-3 font-semibold text-white hover:bg-blue-700"
-          >
-            Sign In
-          </button>
-        </form>
+            <button type="submit" className="w-full rounded-lg bg-blue-600 p-3 font-semibold text-white hover:bg-blue-700">Sign In</button>
+
+            <p className="text-center text-sm text-slate-600">
+              New employee?{' '}
+              <button type="button" onClick={() => { setAuthMode('register'); setRegistrationMessage(''); setRegistrationMessageType(''); }} className="font-semibold text-blue-600 hover:underline">
+                Register as Employee
+              </button>
+            </p>
+          </form>
+        )}
       </div>
     ) : (
       <div className="min-h-screen bg-slate-100 text-slate-800 md:flex">
@@ -4058,6 +4341,8 @@ return (
         ))}
       </div>
 
+      {renderChangePasswordSection()}
+
       <div className="mt-6 border-t pt-5">
         <h4 className="font-semibold text-slate-900">Account Session</h4>
         <p className="mt-1 text-sm text-slate-500">
@@ -4338,6 +4623,8 @@ return (
             </>
           )}
         </div>
+
+        {renderChangePasswordSection()}
 
         <div className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
           <div>
