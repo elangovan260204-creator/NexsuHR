@@ -408,6 +408,44 @@ const handleDelete = async (employeeId) => {
 
 
 
+const loadMyProfile = async () => {
+  if (!token) return;
+
+  setProfileError('');
+  setMyProfile(null);
+
+  try {
+    const response = await fetch('/api/employees/me', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const responseText = await response.text();
+    let data = null;
+
+    try {
+      data = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+        data?.error ||
+        `Could not load your employee profile (HTTP ${response.status}).`
+      );
+    }
+
+    setMyProfile(data);
+  } catch (error) {
+    console.error('My profile loading error:', error);
+    setProfileError(error.message || 'Could not load your profile.');
+  }
+};
+
 const loadAttendance = async (employeeId) => {
   setAttendanceLoading(true);
 
@@ -655,7 +693,7 @@ const loadPerformanceReviews = async () => {
   setPerformanceError("");
 
   try {
-    const response = await fetch("/api/performance", {
+    const response = await fetch(isAdmin ? "/api/performance" : "/api/performance/me", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -999,8 +1037,10 @@ const handleMarkPayrollPaid = async (id) => {
 };
 
 const handleDownloadPayslip = async (payroll) => {
-  const employeeName = getEmployeeName(payroll.employeeId);
-  const payslipWindow = window.open("", "_blank");
+const employeeName = isAdmin
+  ? getEmployeeName(payroll.employeeId)
+  : myProfile?.name || currentUser?.username || "Employee";
+    const payslipWindow = window.open("", "_blank");
 
   if (!payslipWindow) {
     alert("Please allow pop-ups to view the payslip.");
@@ -1566,16 +1606,28 @@ useEffect(() => {
 }, [token, isAdmin]);
 
 
+useEffect(() => {
+  if (
+    (activePage === "Payroll" ||
+      activePage === "Reports" ||
+      activePage === "My Payroll") &&
+    token
+  ) {
+    loadPayrollRecords();
+  }
+}, [activePage, token, isAdmin]);
+
+
 
 useEffect(() => {
-  if (activePage === 'Leave Management' || activePage === 'Reports') {
+  if (token && ['Leave Management', 'Reports', 'My Leaves'].includes(activePage)) {
     loadLeaveRequests()
   }
-}, [activePage])
+}, [activePage, token])
 
 
 useEffect(() => {
-  if (activePage === "Performance" && token) {
+  if ((activePage === "Performance" || activePage === "My Performance") && token) {
     loadPerformanceReviews();
   }
 }, [activePage, token]);
@@ -1684,7 +1736,24 @@ useEffect(() => {
 }, [activePage, token]);
 
 useEffect(() => {
-  if ((activePage === "Payroll" || activePage === "Reports") && token) {
+  if (activePage === "My Attendance" && token) {
+    loadAttendance();
+  }
+}, [activePage, token]);
+
+useEffect(() => {
+  if (
+    (activePage === 'My Profile' || activePage === 'Settings') &&
+    token &&
+    !isAdmin
+  ) {
+    loadMyProfile();
+  }
+}, [activePage, token, isAdmin]);
+
+
+useEffect(() => {
+  if ((activePage === "Payroll" || activePage === "Reports" || activePage === "My Payroll") && token) {
     loadPayrollRecords();
   }
 }, [activePage, token]);
@@ -1824,46 +1893,48 @@ return (
           ))}
         </nav>
 
-        <div className="hidden border-t border-white/10 p-4 md:block">
-          <div className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 font-semibold text-white">
-              AU
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">Admin User</p>
-              <p className="text-xs text-slate-400">System Administrator</p>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* Main content */}
       <main className="min-w-0 flex-1 md:ml-64">
         {/* Top bar */}
         <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 md:px-8">
-          <div className="relative w-full max-w-md">
-            <span className="absolute left-3 top-2.5 text-lg text-slate-400">⌕</span>
-            <input
-              
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search employees, departments..."
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-          <div className="flex items-center gap-4">
-            <button
-              aria-label="Notifications"
-              className="relative rounded-full border border-slate-200 p-2 hover:bg-slate-50"
-            >
-              ♧
-              <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-red-500" />
-            </button>
+          {isAdmin && (
+            <div className="relative w-full max-w-md">
+              <span className="absolute left-3 top-2.5 text-lg text-slate-400">⌕</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search employees, departments..."
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+          )}
+          <div className="ml-auto flex items-center gap-4">
+            {isAdmin && (
+              <button
+                aria-label="Notifications"
+                className="relative rounded-full border border-slate-200 p-2 hover:bg-slate-50"
+              >
+                ♧
+                <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-red-500" />
+              </button>
+            )}
             <div className="flex items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
-                AU
+                {isAdmin
+                  ? 'AU'
+                  : (currentUser?.username || 'Employee')
+                      .split(/[^a-zA-Z0-9]+/)
+                      .filter(Boolean)
+                      .map((part) => part[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()}
               </div>
-              <span className="hidden text-sm font-medium sm:block">Admin User</span>
+              <span className="text-sm font-medium">
+                {isAdmin ? 'Admin User' : (currentUser?.username || 'Employee')}
+              </span>
             </div>
           </div>
         </header>
@@ -3949,26 +4020,354 @@ return (
       </p>
     </div>
   </section>
-) : activePage === "Settings" ? (
+
+  
+
+) : activePage === 'Settings' && isAdmin ? (
   <section className="space-y-6">
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <p className="text-sm text-slate-600">
-        You are signed in with a JWT session stored in this browser tab.
-      </p>
-      <button
-        type="button"
-        onClick={() => {
-          sessionStorage.removeItem("nexushr_token");
-          setToken("");
-          setCurrentUser(null);
-          setEmployees([]);
-          setActivePage('Dashboard');
-        }}
-        className="mt-4 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white"
-      >
-        Sign out
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Administrator Account</p>
+          <h3 className="mt-1 text-xl font-bold text-slate-900">My Account</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Your administrator account and sign-in information.
+          </p>
+        </div>
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-blue-700">
+          {(currentUser?.username || 'Admin')
+            .split(/\s+/)
+            .map((part) => part[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase()}
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {[
+          { label: 'Username', value: currentUser?.username },
+          { label: 'Account Role', value: currentUser?.role || 'ADMIN' },
+          { label: 'Account Type', value: 'Administrator' },
+          { label: 'Session Status', value: token ? 'Signed in' : 'Signed out' },
+        ].map((item) => (
+          <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+            <p className="mt-2 break-words font-semibold text-slate-900">{item.value || 'Not available'}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 border-t pt-5">
+        <h4 className="font-semibold text-slate-900">Account Session</h4>
+        <p className="mt-1 text-sm text-slate-500">
+          You are securely signed in to NexusHR as an administrator.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            sessionStorage.removeItem('nexushr_token');
+            setToken('');
+            setCurrentUser(null);
+            setEmployees([]);
+            setAttendanceRecords([]);
+            setLeaveRequests([]);
+            setPerformanceReviews([]);
+            setPayrollRecords([]);
+            setMyProfile(null);
+            setProfileError('');
+            setActivePage('Dashboard');
+          }}
+          className="mt-4 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+        >
+          Sign Out
+        </button>
+      </div>
     </div>
+  </section>
+
+
+) : !isAdmin ? (
+  <section className="space-y-6">
+    {activePage === 'My Dashboard' ? (
+      <>
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-medium text-blue-600">Employee Workspace</p>
+          <h3 className="mt-2 text-2xl font-bold">Welcome, {currentUser?.username || 'Employee'}!</h3>
+          <p className="mt-2 text-sm text-slate-500">Your personal workspace for attendance, leave, performance, and payroll.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[
+            { name: 'My Profile', description: 'View your personal and job details.', icon: '♟' },
+            { name: 'My Attendance', description: 'Check in, check out, and view attendance.', icon: '▦' },
+            { name: 'My Leaves', description: 'Apply for leave and track request status.', icon: '▣' },
+            { name: 'My Performance', description: 'View your performance reviews.', icon: '▥' },
+            { name: 'My Payroll', description: 'View your salary records.', icon: '₹' },
+            { name: 'Settings', description: 'Manage your account session.', icon: '⚙' },
+          ].map((item) => (
+            <button key={item.name} type="button" onClick={() => setActivePage(item.name)} className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm hover:border-blue-300 hover:shadow-md">
+              <span className="text-2xl">{item.icon}</span><h4 className="mt-3 font-semibold">{item.name}</h4><p className="mt-1 text-sm text-slate-500">{item.description}</p>
+            </button>
+          ))}
+        </div>
+      </>
+    ) : activePage === 'My Profile' ? (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-bold text-slate-900">My Profile</h3>
+            <p className="mt-1 text-sm text-slate-500">Your personal and employment information.</p>
+          </div>
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-blue-700">
+            {(myProfile?.name || currentUser?.username || 'Employee')
+              .split(/\\s+/)
+              .map((part) => part[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase()}
+          </div>
+        </div>
+
+        {profileError ? (
+          <div role="alert" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            <p className="font-semibold">Profile details are not available yet.</p>
+            <p className="mt-1">{profileError}</p>
+            <p className="mt-2">The Employee Service needs a secure GET /api/employees/me endpoint to return only the signed-in employee's record.</p>
+            <button type="button" onClick={loadMyProfile} className="mt-3 rounded-lg border border-amber-300 px-3 py-1.5 font-semibold hover:bg-amber-100">Retry</button>
+          </div>
+        ) : !myProfile ? (
+          <p className="mt-5 text-sm text-slate-500">Loading your profile...</p>
+        ) : (
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {[
+              { label: 'Full Name', value: myProfile.name },
+              { label: 'Username', value: currentUser?.username },
+              { label: 'Email Address', value: myProfile.email },
+              { label: 'Department', value: myProfile.department },
+              { label: 'Designation', value: myProfile.designation },
+              { label: 'Phone Number', value: myProfile.phone },
+              { label: 'Employment Status', value: myProfile.status },
+              { label: 'Joining Date', value: myProfile.joiningDate },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+                <p className="mt-2 break-words font-medium text-slate-900">{item.value || 'Not provided'}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    ) : activePage === 'My Attendance' ? (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h3 className="text-xl font-bold">My Attendance</h3><p className="mt-1 text-sm text-slate-500">Your attendance history and daily check-in.</p></div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => handleCheckIn()} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white">Check In</button>
+            <button type="button" onClick={() => handleCheckOut()} className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">Check Out</button>
+          </div>
+        </div>
+        {attendanceLoading ? <p className="mt-5 text-sm text-slate-500">Loading...</p> : <div className="mt-5 overflow-x-auto"><table className="w-full text-left text-sm">
+          <thead className="border-b bg-slate-50"><tr><th className="p-3">Date</th><th className="p-3">Check In</th><th className="p-3">Check Out</th><th className="p-3">Status</th></tr></thead>
+          <tbody>{attendanceRecords.map(r => <tr key={r.id} className="border-b"><td className="p-3">{r.attendanceDate || '—'}</td><td className="p-3">{r.checkIn ? new Date(r.checkIn).toLocaleTimeString() : '—'}</td><td className="p-3">{r.checkOut ? new Date(r.checkOut).toLocaleTimeString() : '—'}</td><td className="p-3">{r.status || '—'}</td></tr>)}
+            {attendanceRecords.length === 0 && <tr><td colSpan="4" className="p-6 text-center text-slate-500">No attendance records found.</td></tr>}</tbody>
+        </table></div>}
+      </div>
+    ) : activePage === 'My Leaves' ? (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-xl font-bold">Apply for Leave</h3>
+          <form onSubmit={handleApplyLeave} className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div><label className="mb-1 block text-sm font-medium">Start Date</label><input required type="date" value={leaveStartDate} onChange={e => setLeaveStartDate(e.target.value)} className="w-full rounded-lg border px-3 py-2.5" /></div>
+            <div><label className="mb-1 block text-sm font-medium">End Date</label><input required type="date" min={leaveStartDate || undefined} value={leaveEndDate} onChange={e => setLeaveEndDate(e.target.value)} className="w-full rounded-lg border px-3 py-2.5" /></div>
+            <div className="md:col-span-2"><label className="mb-1 block text-sm font-medium">Reason</label><textarea required rows="3" value={leaveReason} onChange={e => setLeaveReason(e.target.value)} className="w-full rounded-lg border px-3 py-2.5" placeholder="Reason for leave" /></div>
+            <div className="md:col-span-2"><button type="submit" className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white">Submit Leave Request</button></div>
+          </form>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-xl font-bold">My Leave History</h3>
+          {leaveLoading ? <p className="mt-4 text-sm text-slate-500">Loading...</p> : <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm">
+            <thead className="border-b bg-slate-50"><tr><th className="p-3">From</th><th className="p-3">To</th><th className="p-3">Reason</th><th className="p-3">Status</th></tr></thead>
+            <tbody>{leaveRequests.map(r => <tr key={r.id} className="border-b"><td className="p-3">{r.startDate || '—'}</td><td className="p-3">{r.endDate || '—'}</td><td className="p-3">{r.reason || '—'}</td><td className="p-3">{r.status || 'PENDING'}</td></tr>)}
+              {leaveRequests.length === 0 && <tr><td colSpan="4" className="p-6 text-center text-slate-500">No leave requests yet.</td></tr>}</tbody>
+          </table></div>}
+        </div>
+      </div>
+    ) : activePage === 'My Performance' ? (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-xl font-bold">My Performance</h3><p className="mt-1 text-sm text-slate-500">Your performance reviews.</p>
+        {performanceError && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{performanceError}</p>}
+        {performanceLoading ? <p className="mt-4 text-sm text-slate-500">Loading...</p> : <div className="mt-5 space-y-4">
+          {performanceReviews.map(r => <article key={r.id} className="rounded-xl border p-4"><div className="flex justify-between gap-2"><h4 className="font-semibold">{r.reviewPeriod || 'Performance Review'}</h4><span className="text-sm font-semibold">Rating: {r.rating ?? '—'}/5</span></div><p className="mt-3 text-sm text-slate-600"><strong>Goals:</strong> {r.goals || '—'}</p><p className="mt-2 text-sm text-slate-600"><strong>Feedback:</strong> {r.feedback || '—'}</p></article>)}
+          {performanceReviews.length === 0 && !performanceError && <p className="text-sm text-slate-500">No reviews available.</p>}
+        </div>}
+      </div>
+    ) : activePage === 'My Payroll' ? (
+  <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+    <h3 className="text-xl font-bold">My Payroll</h3>
+    <p className="mt-1 text-sm text-slate-500">
+      Your salary records, net salary, and payslips.
+    </p>
+
+    {payrollError && (
+      <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        {payrollError}
+      </p>
+    )}
+
+    {payrollLoading ? (
+      <p className="mt-4 text-sm text-slate-500">Loading payroll...</p>
+    ) : (
+      <div className="mt-5 overflow-x-auto">
+        <table className="w-full min-w-[1000px] text-left text-sm">
+          <thead className="border-b bg-slate-50">
+            <tr>
+              <th className="p-3">Period</th>
+              <th className="p-3">Basic</th>
+              <th className="p-3">HRA</th>
+              <th className="p-3">Allowances</th>
+              <th className="p-3">Deductions</th>
+              <th className="p-3">Tax</th>
+              <th className="p-3">Net Salary</th>
+              <th className="p-3">Status</th>
+              <th className="p-3">Payslip</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {payrollRecords.map((r) => (
+              <tr key={r.id} className="border-b">
+                <td className="p-3">{r.payPeriod || "—"}</td>
+                <td className="p-3">{formatMoney(r.basicSalary)}</td>
+                <td className="p-3">{formatMoney(r.hra)}</td>
+                <td className="p-3">{formatMoney(r.allowances)}</td>
+                <td className="p-3">{formatMoney(r.deductions)}</td>
+                <td className="p-3">{formatMoney(r.tax)}</td>
+                <td className="p-3 font-semibold">
+                  {formatMoney(r.netSalary)}
+                </td>
+                <td className="p-3">
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    r.status === "PAID"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-amber-100 text-amber-700"
+                  }`}>
+                    {r.status || (r.paid ? "PAID" : "PENDING")}
+                  </span>
+                </td>
+                <td className="p-3">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPayslip(r)}
+                    className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                  >
+                    Download / Print
+                  </button>
+                </td>
+              </tr>
+            ))}
+
+            {payrollRecords.length === 0 && (
+              <tr>
+                <td colSpan="9" className="p-6 text-center text-slate-500">
+                  No payroll records available.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+
+    ) : activePage === 'Settings' ? (
+      <section className="space-y-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Employee Account</p>
+              <h3 className="mt-1 text-xl font-bold text-slate-900">Account Settings</h3>
+              <p className="mt-1 text-sm text-slate-500">View your account, personal details, and employment information.</p>
+            </div>
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-blue-700">
+              {(myProfile?.name || currentUser?.username || 'Employee')
+                .split(/\s+/)
+                .map((part) => part[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase()}
+            </div>
+          </div>
+
+          {profileError ? (
+            <div role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <p className="font-semibold">Unable to load your account details.</p>
+              <p className="mt-1">{profileError}</p>
+              <button type="button" onClick={loadMyProfile} className="mt-3 rounded-lg border border-red-300 px-3 py-1.5 font-semibold hover:bg-red-100">
+                Retry loading profile
+              </button>
+            </div>
+          ) : !myProfile ? (
+            <div className="mt-6 flex items-center gap-3 text-sm text-slate-500">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+              Loading your account details...
+            </div>
+          ) : (
+            <>
+              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {[
+                  { label: 'Full Name', value: myProfile.name },
+                  { label: 'Username', value: currentUser?.username },
+                  { label: 'Email Address', value: myProfile.email },
+                  { label: 'Account Role', value: currentUser?.role || 'EMPLOYEE' },
+                  { label: 'Department', value: myProfile.department },
+                  { label: 'Designation', value: myProfile.designation },
+                  { label: 'Phone Number', value: myProfile.phone },
+                  { label: 'Joining Date', value: myProfile.joiningDate },
+                  { label: 'Employment Status', value: myProfile.status },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+                    <p className="mt-2 break-words font-medium text-slate-900">{item.value || 'Not provided'}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 flex justify-end">
+                <button type="button" onClick={loadMyProfile} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  Refresh account details
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
+          <div>
+            <h4 className="font-bold text-slate-900">Session & Security</h4>
+            <p className="mt-1 text-sm text-slate-500">Sign out of NexusHR on this device. You will need to sign in again to access your account.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              sessionStorage.removeItem('nexushr_token');
+              setToken('');
+              setCurrentUser(null);
+              setEmployees([]);
+              setAttendanceRecords([]);
+              setLeaveRequests([]);
+              setPerformanceReviews([]);
+              setPayrollRecords([]);
+              setMyProfile(null);
+              setProfileError('');
+              setActivePage('My Dashboard');
+            }}
+            className="mt-5 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+          >
+            Sign Out
+          </button>
+        </div>
+      </section>
+    ) : (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-xl font-bold">{activePage}</h3><p className="mt-2 text-sm text-slate-500">Your personal employee information will appear here.</p></div>
+    )}
   </section>
 ) : (
 
